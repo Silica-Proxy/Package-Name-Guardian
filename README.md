@@ -1,8 +1,10 @@
 # packagenameguardian — Typosquat Detection Service
 
+[![SilicaProxy Logo](https://raw.githubusercontent.com/Silica-Proxy/Silica-Proxy/main/logo.png)](https://github.com/Silica-Proxy/Silica-Proxy)
+
 packagenameguardian is a **standalone typosquat-detection service** for npm, PyPI, and Maven packages. It flags package names that are suspiciously close to one of the most popular packages in their ecosystem — the classic `lodahs` vs `lodash`, `crossenv` vs `cross-env` pattern — using a majority vote across three string-similarity algorithms.
 
-It's designed to be called synchronously by [SilicaProxy](../proxy) (or any other tool) as an **External Validation Service**, but has no dependency on it and can be run and queried standalone.
+It's designed to be called synchronously by [SilicaProxy](https://github.com/Silica-Proxy/Silica-Proxy) (or any other tool) as an **External Validation Service**, but has no dependency on it and can be run and queried standalone.
 
 ---
 
