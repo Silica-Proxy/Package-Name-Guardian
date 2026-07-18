@@ -1,0 +1,145 @@
+plugins {
+	id 'java'
+	id 'jacoco'
+	id 'checkstyle'
+	id 'pmd'
+	id 'com.github.spotbugs' version '6.5.8'
+	id 'org.owasp.dependencycheck' version '12.2.2'
+	id 'org.springframework.boot' version '4.1.0'
+	id 'io.spring.dependency-management' version '1.1.7'
+	id 'com.github.ben-manes.versions' version '0.54.0'
+}
+
+group = 'com.silicaproxy'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+	developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
+
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'io.micrometer:micrometer-registry-prometheus'
+	implementation 'org.springframework.boot:spring-boot-starter-aspectj'
+
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	implementation 'org.springframework.boot:spring-boot-starter-flyway'
+	implementation 'org.flywaydb:flyway-database-postgresql'
+	implementation 'org.postgresql:postgresql'
+
+	implementation 'org.jspecify:jspecify:1.0.0'
+
+	// Similarity algorithms (Levenshtein, Jaro-Winkler, FuzzyScore)
+	implementation 'org.apache.commons:commons-text:1.14.0'
+
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'com.fasterxml.jackson.core:jackson-databind'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+	testImplementation 'org.testcontainers:testcontainers-postgresql'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+
+	spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.14.0'
+}
+
+spotbugs {
+	toolVersion = '4.10.2'
+	effort = 'max'
+	reportLevel = 'medium'
+	excludeFilter = file('config/spotbugs-exclude.xml')
+	ignoreFailures = false
+}
+spotbugsMain {
+	reports {
+		xml { required = true }
+		html { required = true }
+	}
+}
+spotbugsTest { enabled = false }
+
+dependencyCheck {
+	formats = ['HTML', 'JSON']
+	// Do not block the CI build — switch to 7 to fail on HIGH+
+	failBuildOnCVSS = 11
+	suppressionFile = 'config/dependency-check-suppressions.xml'
+	// NVD API key (optional): provide via -PnvdApiKey or NVD_API_KEY environment variable
+	def rawKey = findProperty('nvdApiKey') ?: System.getenv('NVD_API_KEY') ?: ''
+	if (rawKey && !rawKey.toString().startsWith('$')) {
+		nvd {
+			apiKey = rawKey.toString()
+		}
+	}
+}
+
+checkstyle {
+	toolVersion = '13.6.0'
+	configFile = file('config/checkstyle.xml')
+	ignoreFailures = false
+	showViolations = true
+}
+checkstyleMain {
+	reports {
+		xml { required = true }
+		html { required = true }
+	}
+}
+checkstyleTest { enabled = false }
+
+pmd {
+	toolVersion = '7.25.0'
+	ruleSetFiles = files('config/pmd-ruleset.xml')
+	ignoreFailures = false
+	consoleOutput = false
+}
+pmdMain {
+	reports {
+		xml { required = true }
+		html { required = true }
+	}
+}
+pmdTest { enabled = false }
+
+tasks.named('test') {
+	useJUnitPlatform()
+	finalizedBy jacocoTestReport
+	systemProperty 'spring.profiles.active', 'test'
+	testLogging {
+		events 'started', 'passed', 'skipped', 'failed'
+		exceptionFormat 'full'
+		showStandardStreams = false
+	}
+}
+
+jacocoTestReport {
+	reports {
+		xml.required = true
+		html.required = true
+	}
+}
+
+tasks.named('bootJar') {
+	archiveBaseName = 'packagenameguardian'
+}
+
+def isStableVersion = { String version ->
+	def stableKeyword = ['RELEASE', 'FINAL', 'GA'].any { keyword -> version.toUpperCase().contains(keyword) }
+	def stableRegex = /^[0-9,.v-]+(-r)?$/
+	stableKeyword || (version ==~ stableRegex)
+}
+
+tasks.named('dependencyUpdates') {
+	rejectVersionIf {
+		!isStableVersion(it.candidate.version) && isStableVersion(it.currentVersion)
+	}
+}

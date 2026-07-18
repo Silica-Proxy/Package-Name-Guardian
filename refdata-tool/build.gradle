@@ -1,0 +1,182 @@
+plugins {
+	id 'java'
+	id 'groovy'
+	id 'checkstyle'
+	id 'pmd'
+	id 'com.github.spotbugs' version '6.5.8'
+}
+
+group = 'com.silicaproxy'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+// Separate source set/task from `test`: these drive a real, separately-forked Gradle build via
+// GradleRunner (slower, needs Docker for the BigQuery emulator) to verify the actual
+// `generateReferenceDataSql` task end to end -- argument wiring, JavaExec invocation, output file
+// contents -- distinct from DepsDevBigQueryClientEmulatorTest, which exercises the query logic at
+// the plain Java-class level with no Gradle involved at all.
+sourceSets {
+	functionalTest {
+		groovy.srcDir 'src/functionalTest/groovy'
+		resources.srcDir 'src/functionalTest/resources'
+		compileClasspath += sourceSets.main.output
+		runtimeClasspath += sourceSets.main.output
+	}
+}
+
+configurations {
+	functionalTestImplementation.extendsFrom testImplementation
+	functionalTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+dependencies {
+	// BigQuery client -- the whole reason this is a separate subproject: these dependencies must
+	// never end up on the main packagenameguardian app's runtime classpath / bootJar.
+	implementation platform('com.google.cloud:libraries-bom:26.68.0')
+	implementation 'com.google.cloud:google-cloud-bigquery'
+
+	implementation 'org.jspecify:jspecify:1.0.0'
+
+	// No Spring Boot BOM here (this is a plain CLI tool, not a Spring app) -- pin the same
+	// versions the main packagenameguardian build already resolves via its Spring Boot BOM, so
+	// both subprojects test against identical, already-vetted tooling.
+	testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.0.3'
+	testImplementation 'org.assertj:assertj-core:3.27.7'
+	testImplementation 'org.mockito:mockito-core:5.23.0'
+	testImplementation 'org.mockito:mockito-junit-jupiter:5.23.0'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.5'
+	// BigQuery emulator (https://java.testcontainers.org/modules/gcloud/): exercises
+	// DepsDevBigQueryClient's real query logic in the default test suite, no GCP credentials
+	// or cost required (unlike the opt-in bigquery-live smoke test).
+	testImplementation 'org.testcontainers:testcontainers-gcloud:2.0.5'
+
+	// Functional tests (Gradle TestKit + Spock) -- see the functionalTest sourceSet above.
+	functionalTestImplementation gradleTestKit()
+	functionalTestImplementation 'org.apache.groovy:groovy:4.0.24'
+	functionalTestImplementation 'org.spockframework:spock-core:2.3-groovy-4.0'
+
+	spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.14.0'
+}
+
+spotbugs {
+	toolVersion = '4.10.2'
+	effort = 'max'
+	reportLevel = 'medium'
+	excludeFilter = file("${rootDir}/config/spotbugs-exclude.xml")
+	ignoreFailures = false
+}
+spotbugsMain {
+	reports {
+		xml { required = true }
+		html { required = true }
+	}
+}
+spotbugsTest { enabled = false }
+spotbugsFunctionalTest { enabled = false }
+
+checkstyle {
+	toolVersion = '13.6.0'
+	configFile = file("${rootDir}/config/checkstyle.xml")
+	ignoreFailures = false
+	showViolations = true
+}
+checkstyleMain {
+	reports {
+		xml { required = true }
+		html { required = true }
+	}
+}
+checkstyleTest { enabled = false }
+// Groovy/Spock specs, not Java -- Checkstyle/PMD/SpotBugs are configured for this project's Java
+// conventions and have nothing meaningful to check on compiled Groovy bytecode.
+checkstyleFunctionalTest { enabled = false }
+
+pmd {
+	toolVersion = '7.25.0'
+	ruleSetFiles = files("${rootDir}/config/pmd-ruleset.xml")
+	ignoreFailures = false
+	consoleOutput = false
+}
+pmdMain {
+	reports {
+		xml { required = true }
+		html { required = true }
+	}
+}
+pmdTest { enabled = false }
+pmdFunctionalTest { enabled = false }
+
+tasks.named('test') {
+	useJUnitPlatform {
+		excludeTags 'bigquery-live'
+	}
+	testLogging {
+		events 'started', 'passed', 'skipped', 'failed'
+		exceptionFormat 'full'
+		showStandardStreams = false
+	}
+}
+
+tasks.register('bigQueryLiveTest', Test) {
+	group = 'verification'
+	description = 'Runs the opt-in smoke test against the real BigQuery deps.dev public dataset.'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform {
+		includeTags 'bigquery-live'
+	}
+}
+
+tasks.register('functionalTest', Test) {
+	group = 'verification'
+	description = 'Gradle TestKit + Spock: runs the real generateReferenceDataSql task end to end ' +
+			'against a Testcontainers BigQuery emulator (no real GCP credentials needed).'
+	testClassesDirs = sourceSets.functionalTest.output.classesDirs
+	classpath = sourceSets.functionalTest.runtimeClasspath
+	useJUnitPlatform()
+	// TestKit launches a separate, real Gradle build against the actual root project directory
+	// (not this subproject's own directory -- Gradle's settings-file discovery walks up parent
+	// directories, so pointing TestKit at refdata-tool/ alone risks ambiguity with the parent
+	// multi-project settings.gradle; running ":refdata-tool:generateReferenceDataSql" from the
+	// root is also exactly how a maintainer or CI actually invokes this task). Resolved via a
+	// system property, not System.getProperty('user.dir'), so it's correct regardless of the CWD
+	// the outer build was invoked from.
+	systemProperty 'testkit.rootProjectDir', project.rootProject.projectDir.absolutePath
+	testLogging {
+		events 'started', 'passed', 'skipped', 'failed'
+		exceptionFormat 'full'
+		showStandardStreams = false
+	}
+}
+tasks.named('check') {
+	dependsOn tasks.named('functionalTest')
+}
+
+tasks.register('generateReferenceDataSql', JavaExec) {
+	group = 'application'
+	description = 'Maintainer-only: regenerates the packagenameguardian project\'s ' +
+			'src/main/resources/db/migration/R__reference_data_seed.sql from a live BigQuery query. ' +
+			'Uses Application Default Credentials by default (Workload Identity Federation in CI, ' +
+			'or `gcloud auth application-default login` locally) -- pass -PcredentialsPath=... to ' +
+			'use a service-account key file instead. Pass -PdryRun=true to validate the query ' +
+			'against the real dataset via BigQuery dry-run mode and print the estimated bytes ' +
+			'processed, without executing/billing the real scan or writing the output file.'
+	classpath = sourceSets.main.runtimeClasspath
+	mainClass = 'com.silicaproxy.packagenameguardian.refdatatool.ReferenceDataSqlGenerator'
+	args = [
+		findProperty('credentialsPath') ?: '',
+		findProperty('outputFile') ?: '../src/main/resources/db/migration/R__reference_data_seed.sql',
+		(findProperty('topN') ?: '10000').toString(),
+		(findProperty('dryRun') ?: 'false').toString()
+	]
+}

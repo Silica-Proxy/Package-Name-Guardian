@@ -1,0 +1,80 @@
+name: Refresh Reference Data
+
+on:
+  # schedule:
+  #   # First day of each month at 02:00 UTC
+  #   - cron: '0 2 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write  # required to mint the OIDC token Workload Identity Federation exchanges below
+
+jobs:
+  refresh-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      # Exchanges this job's GitHub OIDC token for short-lived GCP credentials via Workload
+      # Identity Federation -- no static service-account key stored in GitHub Secrets. Populates
+      # GOOGLE_APPLICATION_CREDENTIALS with a generated, hour-lived credentials file that
+      # ApplicationDefaultBigQueryServiceFactory (the refdata-tool default) picks up automatically.
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      # TEST WORKFLOW ONLY: -PdryRun=true validates credentials/query against the real BigQuery
+      # dataset without executing/billing the ~417 GB scan or writing the seed file -- so "Check
+      # for changes" below always reports no change and "Create Pull Request" never runs. Drop
+      # -PdryRun=true once this workflow is validated end to end for real.
+      - name: Generate reference data SQL
+        run: ./gradlew :refdata-tool:generateReferenceDataSql -PdryRun=true
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if git diff --quiet -- src/main/resources/db/migration/R__reference_data_seed.sql; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Pull Request
+        if: steps.check-changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@c5a7806660adbe173f04e3e038b0ccdcd758773c # v6.1.0
+        with:
+          add-paths: src/main/resources/db/migration/R__reference_data_seed.sql
+          commit-message: |
+            chore: refresh reference data from deps.dev BigQuery dataset
+
+            Monthly refresh of the top-10,000 packages per ecosystem (npm, PyPI,
+            Maven), sourced from Google's public deps.dev BigQuery dataset.
+          title: 'chore: monthly reference data refresh'
+          body: |
+            ## Automated reference data refresh
+
+            Regenerates `R__reference_data_seed.sql` — the top-10,000 packages
+            per ecosystem (npm, PyPI, Maven) — from Google's public
+            [deps.dev](https://deps.dev) BigQuery dataset.
+
+            **Before merging:**
+            - Review the diff for unexpected ranking changes.
+            - Confirm CI (`./gradlew test`, static analysis) is green.
+
+            **After merge:**
+            - Flyway re-applies this migration on the next deploy/restart.
+            - No downtime — the previous reference data keeps serving until then.
+          branch: chore/refresh-reference-data
+          delete-branch: true
+          labels: maintenance,data

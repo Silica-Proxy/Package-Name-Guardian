@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: packagenameguardian
+
+  threads:
+    virtual:
+      enabled: true
+
+logging:
+  level:
+    org.flywaydb: DEBUG
+    org.springframework.boot.autoconfigure.flyway: DEBUG
+    com.silicaproxy.packagenameguardian: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+packagenameguardian:
+  reference-data:
+    # Small fixture datasets (a handful of packages per ecosystem) must not trip the sanity guard.
+    min-acceptable-count-per-ecosystem: 1
+    freshness-max-age-hours: 1512
+
+  security:
+    enabled: false
+    api-key: "test-api-key"
+
+server:
+  port: 0

@@ -1,0 +1,10 @@
+services:
+  postgres:
+    image: 'postgres:18-alpine'
+    environment:
+      - 'POSTGRES_DB=packagenameguardian'
+      - 'POSTGRES_USER=postgres'
+      - 'POSTGRES_PASSWORD=postgres'
+    ports:
+      # Host port 5433, not 5432: proxy's own compose.yaml already binds 5432 on the host.
+      - '5433:5432'

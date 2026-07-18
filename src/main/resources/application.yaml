@@ -1,0 +1,66 @@
+spring:
+  application:
+    name: packagenameguardian
+
+  threads:
+    virtual:
+      enabled: true
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5433/packagenameguardian}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: ${HIKARI_MAX_POOL_SIZE:20}
+      minimum-idle: ${HIKARI_MIN_IDLE:5}
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:1500}
+      max-lifetime: ${HIKARI_MAX_LIFETIME:1800000}
+
+logging:
+  level:
+    com.silicaproxy.packagenameguardian: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      show-details: always
+      status:
+        order: down,out-of-service,degraded,up,unknown
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
+
+packagenameguardian:
+  reference-data:
+    # Health-check sanity floor: reference_package having fewer than this many rows for any
+    # ecosystem is reported DOWN. Data itself is seeded by the R__reference_data_seed.sql Flyway
+    # repeatable migration -- refreshed monthly via a reviewed pull request (see
+    # .github/workflows/refresh-reference-data.yml and refdata-tool/), never fetched at runtime.
+    min-acceptable-count-per-ecosystem: 5000
+    # 63 days: one missed monthly reference-data refresh tolerated before reporting DEGRADED.
+    freshness-max-age-hours: 1512
+
+  security:
+    # Set to false only for local dev / tests: POST /v1/check becomes unauthenticated. Proxy
+    # sends this as a decision oracle over the network, so this must stay true (with a real
+    # api-key configured) in any deployment reachable outside a trusted network.
+    enabled: "${PACKAGENAMEGUARDIAN_SECURITY_ENABLED:true}"
+    api-key: "${PACKAGENAMEGUARDIAN_API_KEY:}"
+
+  similarity:
+    # A candidate whose npm @scope already has at least one popular package in the reference set
+    # can't be a typosquatter impersonating that scope -- npm enforces scope ownership.
+    npm-same-scope-exemption-enabled: true
+    # Same idea for Maven's groupId -- Maven Central enforces groupId ownership. PyPI has no
+    # namespace concept, so there's no equivalent property for it.
+    maven-same-group-id-exemption-enabled: true
+
+server:
+  port: 8100

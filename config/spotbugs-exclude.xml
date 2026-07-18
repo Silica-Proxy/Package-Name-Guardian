@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+
+    <!-- Spring components (config/controller/dao/service) store their dependencies via
+         constructor injection (singleton beans) or infrastructure objects with a
+         managed lifecycle (JdbcClient, MeterRegistry, repositories). SpotBugs cannot
+         distinguish these cases from genuine mutability leaks. Mirrors proxy's own
+         config/spotbugs-exclude.xml entry for the identical pattern. -->
+    <Match>
+        <Class name="~com\.silicaproxy\.packagenameguardian\.(config|controller|dao|service)\..*"/>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+
+</FindBugsFilter>
