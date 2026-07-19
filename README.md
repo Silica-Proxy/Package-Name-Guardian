@@ -130,7 +130,7 @@ refdata-tool/                                (separate Gradle subproject -- BigQ
 
 ### BigQuery cost
 
-Querying `bigquery-public-data.deps_dev_v1.DependentsLatest` (a view filtering on `SnapshotAt = (SELECT MAX(Time) FROM Snapshots)`, a dynamic subquery) scans close to its entire 169-day, ~79 TB history — BigQuery's planner can't prune partitions against a value it doesn't know until execution. `DepsDevBigQueryClient` (in `refdata-tool/`) instead resolves the latest snapshot timestamp first, then binds it as a genuine query parameter into a query against `Dependents` (the base table, DAY-partitioned on `SnapshotAt`, clustered on `System`/`Name`/`Version`) — letting BigQuery prune to a single day's partition. Measured cost: **~417 GB per run** (vs ~49 TB unoptimized), comfortably under the 1 TB `maximumBytesBilled` safety cap.
+Querying `bigquery-public-data.deps_dev_v1.DependentsLatest` (a view filtering on `SnapshotAt = (SELECT MAX(Time) FROM Snapshots)`, a dynamic subquery) scans close to its entire 169-day, ~79 TB history — BigQuery's planner can't prune partitions against a value it doesn't know until execution. `DepsDevBigQueryClient` (in `refdata-tool/`) instead resolves the latest snapshot timestamp first, then binds it as a genuine query parameter into a query against `Dependents` (the base table, DAY-partitioned on `SnapshotAt`, clustered on `System`/`Name`/`Version`) — letting BigQuery prune to a single day's partition. Measured cost: **~417 GB per run** (vs ~49 TB unoptimized), comfortably under the 600 GB `maximumBytesBilled` safety cap.
 
 ---
 

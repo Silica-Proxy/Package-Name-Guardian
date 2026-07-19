@@ -34,12 +34,8 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      # TEST WORKFLOW ONLY: -PdryRun=true validates credentials/query against the real BigQuery
-      # dataset without executing/billing the ~417 GB scan or writing the seed file -- so "Check
-      # for changes" below always reports no change and "Create Pull Request" never runs. Drop
-      # -PdryRun=true once this workflow is validated end to end for real.
       - name: Generate reference data SQL
-        run: ./gradlew :refdata-tool:generateReferenceDataSql -PdryRun=true
+        run: ./gradlew :refdata-tool:generateReferenceDataSql
 
       - name: Check for changes
         id: check-changes

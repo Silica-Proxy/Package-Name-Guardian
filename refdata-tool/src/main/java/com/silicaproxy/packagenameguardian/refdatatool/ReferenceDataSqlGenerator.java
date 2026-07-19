@@ -56,10 +56,10 @@ public final class ReferenceDataSqlGenerator {
 
     private static final int MAX_BATCH_SIZE = 500;
     private static final int DEFAULT_TOP_N = 10000;
-    // 1 TB: measured real cost of the partition-pruned query (Dependents filtered to a single day
+    // 600 GB: measured real cost of the partition-pruned query (Dependents filtered to a single day
     // via a resolved literal snapshot timestamp, see DepsDevBigQueryClient) is ~417 GB; this gives
     // headroom for the dataset growing before it needs raising again.
-    private static final long MAXIMUM_BYTES_BILLED = 1_000_000_000_000L;
+    private static final long MAXIMUM_BYTES_BILLED = 600_000_000_000L;
 
     private ReferenceDataSqlGenerator() {
     }
