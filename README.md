@@ -285,7 +285,7 @@ Commit the regenerated file through a normal reviewed PR (the scheduled `refresh
 
 ## Configuration
 
-Every YAML property can be overridden by an environment variable (Spring Boot relaxed binding: dots/hyphens → `_`, uppercase — e.g. `packagenameguardian.reference-data.freshness-max-age-hours` → `PACKAGENAMEGUARDIAN_REFERENCEDATA_FRESHNESSMAXAGEHOURS`).
+### YAML / CLI properties
 
 | Category | YAML property | Default | Description |
 |---|---|---|---|
@@ -298,6 +298,22 @@ Every YAML property can be overridden by an environment variable (Spring Boot re
 | **Database** | `spring.datasource.url` | `jdbc:postgresql://localhost:5433/packagenameguardian` | |
 | | `spring.datasource.username` / `password` | `postgres` / `postgres` | |
 | **Server** | `server.port` | `8100` | |
+
+### Docker environment variables
+
+Pass these as `-e` flags to `docker run`, or use in a `docker-compose.yml` `environment:` block. Spring Boot relaxed binding applies: dots/hyphens → `_`, uppercase (e.g. `packagenameguardian.reference-data.min-acceptable-count-per-ecosystem` → `PACKAGENAMEGUARDIAN_REFERENCE_DATA_MIN_ACCEPTABLE_COUNT_PER_ECOSYSTEM`).
+
+| Category | Environment variable | Default | Description |
+|---|---|---|---|
+| **Reference data** | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_MIN_ACCEPTABLE_COUNT_PER_ECOSYSTEM` | `5000` | Health-check floor — fewer rows than this for any ecosystem reports `DOWN` |
+| | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_FRESHNESS_MAX_AGE_HOURS` | `1512` (63 days) | How stale the seed migration's last apply can get before reporting `DEGRADED` |
+| **Security** | `PACKAGENAMEGUARDIAN_SECURITY_ENABLED` | `true` | Require `Authorization: Bearer {api-key}` on `POST /v1/check` |
+| | `PACKAGENAMEGUARDIAN_SECURITY_API_KEY` | _(empty)_ | Fails closed if enabled with no key set |
+| **Similarity** | `PACKAGENAMEGUARDIAN_SIMILARITY_NPM_SAME_SCOPE_EXEMPTION_ENABLED` | `true` | Exempt candidates sharing a known npm `@scope` |
+| | `PACKAGENAMEGUARDIAN_SIMILARITY_MAVEN_SAME_GROUP_ID_EXEMPTION_ENABLED` | `true` | Exempt candidates sharing a known Maven `groupId` |
+| **Database** | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5433/packagenameguardian` | |
+| | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `postgres` / `postgres` | |
+| **Server** | `SERVER_PORT` | `8100` | |
 
 ---
 

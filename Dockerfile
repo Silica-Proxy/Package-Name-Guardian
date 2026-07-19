@@ -2,7 +2,6 @@
 FROM eclipse-temurin:25-jdk AS builder
 WORKDIR /app
 
-# Copy gradle wrapper and config first for better layer caching
 COPY gradle/ ./gradle/
 COPY gradlew .
 COPY settings.gradle .
@@ -14,11 +13,30 @@ COPY refdata-tool/ ./refdata-tool/
 # Download dependencies (cached separately)
 RUN ./gradlew dependencies --no-daemon || true
 
-# Copy source code
 COPY src/ ./src/
 
-# Build the application (skip tests) - packagenameguardian is the root project
 RUN ./gradlew bootJar --no-daemon -x test
+
+# Stage 1b: Generate AOT cache with training run
+FROM eclipse-temurin:25-jdk-alpine AS aot-generator
+WORKDIR /app
+
+COPY compose.yaml .
+
+COPY src/main/resources/db/migration/ ./src/main/resources/db/migration/
+
+COPY --from=builder /app/build/libs/*.jar ./packagenameguardian.jar
+
+# Generate AOT cache with a cold training run (no DB available at build time).
+# JEP 514 (Java 25): -XX:AOTCacheOutput does training run automatically, observes
+# class loading/linking patterns, then creates the cache in a single invocation.
+# Cache is "cold" (no observations from actual queries), but startup patterns are
+# captured; in production with a real DB, the cache will refine over time.
+RUN timeout 30 java \
+    -XX:AOTCacheOutput=packagenameguardian.aot \
+    -Dspring.datasource.url=jdbc:postgresql://localhost:5432/dummy \
+    -Dspring.profiles.active=prod \
+    -jar packagenameguardian.jar || true
 
 # Stage 2: Create minimal JRE with jlink
 FROM eclipse-temurin:25-jdk-alpine AS jre-builder
@@ -52,9 +70,10 @@ ENV JAVA_HOME=/opt/jre
 ENV PATH="$JAVA_HOME/bin:$PATH"
 WORKDIR /app
 
-# Copy minimal JRE and application
+# Copy minimal JRE, application, and AOT cache
 COPY --from=jre-builder /opt/jre /opt/jre
 COPY --from=builder /app/build/libs/*.jar /app/packagenameguardian.jar
+COPY --from=aot-generator /app/packagenameguardian.aot /app/packagenameguardian.aot
 
 # Create non-root user and directories
 RUN addgroup -S appgroup && \
@@ -62,15 +81,14 @@ RUN addgroup -S appgroup && \
     mkdir -p /app/logs && \
     chown -R appuser:appgroup /app/logs
 
-# Switch to non-root user
 USER appuser
 
-# Expose port 8100 (Spring Boot server port)
-EXPOSE 8100
+EXPOSE 8080
 
-# JVM tuning for production
 ENTRYPOINT ["java", \
-    "-XX:+UseZGC", \
+    "-XX:AOTCache=packagenameguardian.aot", \
+    "-XX:+UseG1GC", \
+    "-XX:MaxGCPauseMillis=100", \
     "-XX:MaxRAMPercentage=75.0", \
     "-XX:+UseCompactObjectHeaders", \
     "-XX:+UseStringDeduplication", \
