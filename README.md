@@ -205,11 +205,27 @@ java -jar packagenameguardian.jar \
 
 ### Production — Docker
 
+Pre-built images are available on [Docker Hub](https://hub.docker.com/r/silicaproxy/packagenameguardian).
+
+#### Using a pre-built image
+
+```bash
+docker run -d \
+  -p 8100:8100 \
+  -e SPRING_DATASOURCE_URL=jdbc:postgresql://your-db:5432/packagenameguardian \
+  -e SPRING_DATASOURCE_USERNAME=prod_user \
+  -e SPRING_DATASOURCE_PASSWORD=prod_password \
+  -e PACKAGENAMEGUARDIAN_API_KEY=your-generated-key \
+  silicaproxy/packagenameguardian:latest
+```
+
+#### Building a local image
+
 ```bash
 docker build -t packagenameguardian .
 ```
 
-The included multi-stage `Dockerfile` builds `bootJar` with the Gradle wrapper, then `jlink`s a minimal JRE (only the modules `jdeps` finds actually in use, plus `jdk.crypto.ec`) into a non-root `alpine` runtime image — no Docker Hub image is published, build locally or in your own CI. All configuration is passed as environment variables:
+The included multi-stage `Dockerfile` builds `bootJar` with the Gradle wrapper, then `jlink`s a minimal JRE (only the modules `jdeps` finds actually in use, plus `jdk.crypto.ec`) into a non-root `alpine` runtime image. All configuration is passed as environment variables:
 
 ```bash
 docker run -d \
