@@ -63,7 +63,7 @@ dependencies {
 	// Functional tests (Gradle TestKit + Spock) -- see the functionalTest sourceSet above.
 	functionalTestImplementation gradleTestKit()
 	functionalTestImplementation 'org.apache.groovy:groovy:4.0.24'
-	functionalTestImplementation 'org.spockframework:spock-core:2.3-groovy-4.0'
+	functionalTestImplementation 'org.spockframework:spock-core:2.4-groovy-4.0'
 
 	spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.14.0'
 }
