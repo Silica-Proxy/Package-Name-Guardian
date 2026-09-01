@@ -49,7 +49,7 @@ dependencies {
 	// No Spring Boot BOM here (this is a plain CLI tool, not a Spring app) -- pin the same
 	// versions the main packagenameguardian build already resolves via its Spring Boot BOM, so
 	// both subprojects test against identical, already-vetted tooling.
-	testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+	testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.0.3'
 	testImplementation 'org.assertj:assertj-core:3.27.7'
 	testImplementation 'org.mockito:mockito-core:5.23.0'
