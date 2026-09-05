@@ -44,7 +44,7 @@ dependencies {
 	implementation platform('com.google.cloud:libraries-bom:26.68.0')
 	implementation 'com.google.cloud:google-cloud-bigquery'
 
-	implementation 'org.jspecify:jspecify:1.0.0'
+	implementation 'org.jspecify:jspecify:1.0.1'
 
 	// No Spring Boot BOM here (this is a plain CLI tool, not a Spring app) -- pin the same
 	// versions the main packagenameguardian build already resolves via its Spring Boot BOM, so
