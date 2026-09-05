@@ -41,7 +41,7 @@ dependencies {
 	implementation 'org.jspecify:jspecify:1.0.0'
 
 	// Similarity algorithms (Levenshtein, Jaro-Winkler, FuzzyScore)
-	implementation 'org.apache.commons:commons-text:1.14.0'
+	implementation 'org.apache.commons:commons-text:1.15.0'
 
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'com.fasterxml.jackson.core:jackson-databind'
