@@ -97,6 +97,15 @@ public class PackageCheckService {
         }
 
         String normalizedName = normalizer.normalize(request.packageName(), ecosystem);
+
+        // Operator-confirmed real packages that would otherwise collide with a popular package
+        // under the similarity scan (see package_allowlist / AllowlistController) are allowed
+        // without ever running the scanner.
+        if (ecosystemData.allowlistedNames().contains(normalizedName)) {
+            recordVerdict(ecosystem, Metrics.VERDICT_ALLOWED_VIA_ALLOWLIST);
+            return CheckResponse.allowed();
+        }
+
         ScanResult result = scanner.scan(normalizedName, ecosystemData);
 
         if (!result.flagged()) {

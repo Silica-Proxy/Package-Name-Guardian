@@ -27,7 +27,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record PackageNameGuardianProperties(
     ReferenceDataProperties referenceData,
     SecurityProperties security,
-    SimilarityProperties similarity
+    SimilarityProperties similarity,
+    AllowlistProperties allowlist
 ) {
 
     public record ReferenceDataProperties(
@@ -56,5 +57,12 @@ public record PackageNameGuardianProperties(
         // groupId ownership, so a candidate sharing a groupId with an already-popular package
         // can't be a typosquatter impersonating that groupId.
         @DefaultValue("true") boolean mavenSameGroupIdExemptionEnabled
+    ) {}
+
+    public record AllowlistProperties(
+        // How often ReferenceDataStartupLoader.reload() re-reads reference_package and
+        // package_allowlist into the in-memory snapshot, so an allowlist entry added through the
+        // admin API takes effect without an app restart.
+        @DefaultValue("60000") long refreshIntervalMs
     ) {}
 }

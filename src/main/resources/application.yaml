@@ -62,5 +62,10 @@ packagenameguardian:
     # namespace concept, so there's no equivalent property for it.
     maven-same-group-id-exemption-enabled: true
 
+  allowlist:
+    # How often package_allowlist (managed via POST/DELETE /v1/allowlist) is reloaded into the
+    # in-memory snapshot, so an entry added through the admin API takes effect without a restart.
+    refresh-interval-ms: 60000
+
 server:
   port: 8100

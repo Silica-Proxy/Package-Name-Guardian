@@ -20,7 +20,9 @@ package com.silicaproxy.packagenameguardian.service.sync;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.silicaproxy.packagenameguardian.dao.repository.AllowlistRepository;
 import com.silicaproxy.packagenameguardian.dao.repository.ReferencePackageRepository;
+import com.silicaproxy.packagenameguardian.model.entity.AllowlistEntry;
 import com.silicaproxy.packagenameguardian.model.entity.ReferencePackage;
 import com.silicaproxy.packagenameguardian.service.similarity.PackageNameNormalizer;
 import com.silicaproxy.packagenameguardian.service.similarity.PackageNamespaceExtractor;
@@ -37,6 +39,9 @@ class ReferenceDataStartupLoaderTest {
     @Mock
     private ReferencePackageRepository referencePackageRepository;
 
+    @Mock
+    private AllowlistRepository allowlistRepository;
+
     private ReferenceDataCache cache;
     private ReferenceDataStartupLoader loader;
 
@@ -45,7 +50,7 @@ class ReferenceDataStartupLoaderTest {
         cache = new ReferenceDataCache();
         ReferenceSnapshotFactory snapshotFactory =
                 new ReferenceSnapshotFactory(new PackageNameNormalizer(), new PackageNamespaceExtractor());
-        loader = new ReferenceDataStartupLoader(referencePackageRepository, cache, snapshotFactory);
+        loader = new ReferenceDataStartupLoader(referencePackageRepository, allowlistRepository, cache, snapshotFactory);
     }
 
     @Test
@@ -53,6 +58,7 @@ class ReferenceDataStartupLoaderTest {
         when(referencePackageRepository.findAll()).thenReturn(List.of(
                 new ReferencePackage("NPM", "lodash", 1000, 1),
                 new ReferencePackage("PYPI", "requests", 800, 1)));
+        when(allowlistRepository.findAll()).thenReturn(List.of());
 
         loader.run(null);
 
@@ -63,11 +69,41 @@ class ReferenceDataStartupLoaderTest {
     }
 
     @Test
+    void alsoLoadsAllowlistEntriesIntoTheSnapshot() {
+        when(referencePackageRepository.findAll()).thenReturn(List.of(
+                new ReferencePackage("NPM", "react-dom", 1000, 1)));
+        when(allowlistRepository.findAll()).thenReturn(List.of(
+                new AllowlistEntry("NPM", "react-dnd", java.time.Instant.now())));
+
+        loader.run(null);
+
+        ReferenceSnapshot snapshot = cache.current();
+        assertThat(snapshot).isNotNull();
+        assertThat(snapshot.ecosystem("npm").allowlistedNames()).contains("react-dnd");
+    }
+
+    @Test
     void leavesTheCacheEmptyWhenTheTableHasNoRowsYet() {
         when(referencePackageRepository.findAll()).thenReturn(List.of());
+        when(allowlistRepository.findAll()).thenReturn(List.of());
 
         loader.run(null);
 
         assertThat(cache.current()).isNull();
+    }
+
+    @Test
+    void keepsThePreviousSnapshotWhenAReloadFails() {
+        when(referencePackageRepository.findAll()).thenReturn(List.of(
+                new ReferencePackage("NPM", "lodash", 1000, 1)));
+        when(allowlistRepository.findAll())
+                .thenReturn(List.of())
+                .thenThrow(new RuntimeException("transient DB outage"));
+
+        loader.run(null);
+        ReferenceSnapshot firstSnapshot = cache.current();
+        loader.reload();
+
+        assertThat(cache.current()).isSameAs(firstSnapshot);
     }
 }

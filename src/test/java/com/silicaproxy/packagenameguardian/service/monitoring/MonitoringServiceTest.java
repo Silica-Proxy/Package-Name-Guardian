@@ -23,6 +23,7 @@ import static org.mockito.Mockito.when;
 import com.silicaproxy.packagenameguardian.dao.repository.HealthCheckRepository;
 import com.silicaproxy.packagenameguardian.dao.repository.ReferencePackageRepository;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties;
+import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.AllowlistProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.ReferenceDataProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.SecurityProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.SimilarityProperties;
@@ -43,7 +44,8 @@ class MonitoringServiceTest {
     private static final PackageNameGuardianProperties PROPERTIES = new PackageNameGuardianProperties(
             new ReferenceDataProperties(5000, 1512L),
             new SecurityProperties(true, "test-api-key"),
-            new SimilarityProperties(true, true));
+            new SimilarityProperties(true, true),
+            new AllowlistProperties(60000L));
 
     private static final Map<String, Long> HEALTHY_COUNTS = Map.of("NPM", 10000L, "PYPI", 10000L, "MAVEN", 10000L);
 

@@ -41,7 +41,7 @@ class SimilarityScannerTest {
         List<ReferencePackage> rows = names.stream()
                 .map(name -> new ReferencePackage("NPM", name, 1000, 1))
                 .toList();
-        return ReferenceSnapshot.from(rows, normalizer, namespaceExtractor).ecosystem("npm");
+        return ReferenceSnapshot.from(rows, List.of(), normalizer, namespaceExtractor).ecosystem("npm");
     }
 
     @Test

@@ -86,7 +86,7 @@ class RealDataSimilarityScannerTest {
         List<ReferencePackage> rows = rowsByEcosystem.get(bigQueryEcosystem).stream()
                 .filter(row -> !row.packageName().equals(excludedPackageName))
                 .collect(Collectors.toList());
-        return ReferenceSnapshot.from(rows, NORMALIZER, NAMESPACE_EXTRACTOR)
+        return ReferenceSnapshot.from(rows, List.of(), NORMALIZER, NAMESPACE_EXTRACTOR)
                 .ecosystem(bigQueryEcosystem.toLowerCase(Locale.ROOT));
     }
 
@@ -152,7 +152,7 @@ class RealDataSimilarityScannerTest {
 
     @Test
     void scanningAgainstTenThousandRealCandidatesStaysFast() {
-        EcosystemSnapshot npmSnapshot = ReferenceSnapshot.from(rowsByEcosystem.get("NPM"), NORMALIZER, NAMESPACE_EXTRACTOR)
+        EcosystemSnapshot npmSnapshot = ReferenceSnapshot.from(rowsByEcosystem.get("NPM"), List.of(), NORMALIZER, NAMESPACE_EXTRACTOR)
                 .ecosystem("npm");
         List<String> craftedTyposquats = List.of(
                 "lodahs", "expres", "reactt", "babbel", "webpck", "jestt", "chalck", "eslintt");

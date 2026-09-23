@@ -20,6 +20,7 @@ package com.silicaproxy.packagenameguardian.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties;
+import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.AllowlistProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.ReferenceDataProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.SecurityProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.SimilarityProperties;
@@ -29,10 +30,11 @@ class ApiKeyValidatorTest {
 
     private static final ReferenceDataProperties REFERENCE_DATA = new ReferenceDataProperties(5000, 1512L);
     private static final SimilarityProperties SIMILARITY = new SimilarityProperties(true, true);
+    private static final AllowlistProperties ALLOWLIST = new AllowlistProperties(60000L);
 
     private ApiKeyValidator validatorFor(boolean enabled, String configuredApiKey) {
         PackageNameGuardianProperties properties = new PackageNameGuardianProperties(
-                REFERENCE_DATA, new SecurityProperties(enabled, configuredApiKey), SIMILARITY);
+                REFERENCE_DATA, new SecurityProperties(enabled, configuredApiKey), SIMILARITY, ALLOWLIST);
         return new ApiKeyValidator(properties);
     }
 
