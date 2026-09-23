@@ -41,7 +41,7 @@ configurations {
 dependencies {
 	// BigQuery client -- the whole reason this is a separate subproject: these dependencies must
 	// never end up on the main packagenameguardian app's runtime classpath / bootJar.
-	implementation platform('com.google.cloud:libraries-bom:26.68.0')
+	implementation platform('com.google.cloud:libraries-bom:26.87.0')
 	implementation 'com.google.cloud:google-cloud-bigquery'
 
 	implementation 'org.jspecify:jspecify:1.0.0'
