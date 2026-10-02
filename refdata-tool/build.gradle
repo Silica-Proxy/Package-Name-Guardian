@@ -3,7 +3,7 @@ plugins {
 	id 'groovy'
 	id 'checkstyle'
 	id 'pmd'
-	id 'com.github.spotbugs' version '6.5.8'
+	id 'com.github.spotbugs' version '6.5.11'
 }
 
 group = 'com.silicaproxy'
