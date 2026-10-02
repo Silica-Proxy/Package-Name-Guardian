@@ -18,12 +18,14 @@
 package com.silicaproxy.packagenameguardian.service.check;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.silicaproxy.packagenameguardian.model.dto.CheckRequest;
 import com.silicaproxy.packagenameguardian.model.dto.CheckResponse;
 import com.silicaproxy.packagenameguardian.model.dto.Verdict;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties;
+import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.AllowlistProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.ReferenceDataProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.SecurityProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.SimilarityProperties;
@@ -51,7 +53,8 @@ class PackageCheckServiceTest {
     private static final PackageNameGuardianProperties PROPERTIES = new PackageNameGuardianProperties(
             new ReferenceDataProperties(5000, 1512L),
             new SecurityProperties(true, "test-api-key"),
-            new SimilarityProperties(true, true));
+            new SimilarityProperties(true, true),
+            new AllowlistProperties(60000L));
 
     @Mock
     private ReferenceDataCache cache;
@@ -113,7 +116,7 @@ class PackageCheckServiceTest {
     @Test
     void allowsCandidateWhoseNamespaceAlreadyHasAPopularPackageWithoutEvenScanning() {
         EcosystemSnapshot mavenData = new EcosystemSnapshot(Set.of(), Collections.emptyNavigableMap(),
-                Set.of("org.springframework"));
+                Set.of("org.springframework"), Set.of());
         ReferenceSnapshot snapshot = new ReferenceSnapshot(Map.of("maven", mavenData));
         when(cache.current()).thenReturn(snapshot);
         when(namespaceExtractor.extractNamespace("org.springframework:spring-newmodule", "maven"))
@@ -124,5 +127,20 @@ class PackageCheckServiceTest {
 
         assertThat(response.verdict()).isEqualTo(Verdict.ALLOWED);
         assertThat(response.reason()).isNull();
+    }
+
+    @Test
+    void allowsAnAllowlistedCandidateWithoutEvenScanning() {
+        EcosystemSnapshot npmData = new EcosystemSnapshot(Set.of(), Collections.emptyNavigableMap(),
+                Set.of(), Set.of("react-dnd"));
+        ReferenceSnapshot snapshot = new ReferenceSnapshot(Map.of("npm", npmData));
+        when(cache.current()).thenReturn(snapshot);
+        when(normalizer.normalize("react-dnd", "npm")).thenReturn("react-dnd");
+
+        CheckResponse response = checkService.check(new CheckRequest("react-dnd", "1.0.0", "npm"));
+
+        assertThat(response.verdict()).isEqualTo(Verdict.ALLOWED);
+        assertThat(response.reason()).isNull();
+        verifyNoInteractions(scanner);
     }
 }

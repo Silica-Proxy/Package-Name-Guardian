@@ -67,7 +67,7 @@ class PackageCheckControllerIntegrationTest extends BaseIntegrationTest {
                 new ReferencePackage("NPM", "express", 900, 2),
                 new ReferencePackage("PYPI", "requests", 800, 1),
                 new ReferencePackage("MAVEN", "org.apache.commons:commons-text", 600, 1));
-        cache.swap(snapshotFactory.build(rows));
+        cache.swap(snapshotFactory.build(rows, List.of()));
     }
 
     private CheckResponse check(CheckRequest request) throws IOException, InterruptedException {

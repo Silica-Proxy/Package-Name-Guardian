@@ -35,5 +35,6 @@ public final class Metrics {
 
     public static final String CHECK_VERDICTS_METRIC = "packagenameguardian.check.verdicts";
     public static final String VERDICT_ALLOWED = "ALLOWED";
+    public static final String VERDICT_ALLOWED_VIA_ALLOWLIST = "ALLOWED_VIA_ALLOWLIST";
     public static final String VERDICT_BLOCKED = "BLOCKED";
 }

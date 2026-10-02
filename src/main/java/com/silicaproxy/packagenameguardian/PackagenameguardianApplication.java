@@ -21,15 +21,18 @@ import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianPropert
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Spring Boot entry point of packagenameguardian. Executed once at process startup
  * (executable JAR or {@code ./gradlew bootRun}) : starts the Spring context, the embedded Tomcat,
- * and (via {@code ReferenceDataStartupLoader}) an immediate reference-data sync if the database
- * is empty.
+ * an immediate reference-data + allowlist sync via {@code ReferenceDataStartupLoader}, and
+ * (via {@code @EnableScheduling}) that same loader's periodic reload so allowlist changes made
+ * through the admin API take effect without a restart.
  */
 @SpringBootApplication
 @EnableConfigurationProperties(PackageNameGuardianProperties.class)
+@EnableScheduling
 public class PackagenameguardianApplication {
 
     public static void main(String[] args) {
