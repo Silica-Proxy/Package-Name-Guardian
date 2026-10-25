@@ -78,6 +78,17 @@ class AllowlistControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void addingAPackageNameWithAControlCharacterIsRejected() throws IOException, InterruptedException {
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/v1/allowlist"))
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"packageName\":\"bad\\nname\",\"ecosystem\":\"npm\"}"))
+                .build();
+
+        assertThat(httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString()).statusCode()).isEqualTo(400);
+    }
+
+    @Test
     void addingTheSameEntryTwiceIsRejectedAsAConflict() throws IOException, InterruptedException {
         assertThat(post(new AllowlistEntryRequest("duplicate-pkg", "npm")).statusCode()).isEqualTo(200);
 

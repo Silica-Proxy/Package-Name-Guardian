@@ -17,6 +17,7 @@
 
 package com.silicaproxy.packagenameguardian.service.check;
 
+import com.silicaproxy.packagenameguardian.config.LogSanitizer;
 import com.silicaproxy.packagenameguardian.config.Metrics;
 import com.silicaproxy.packagenameguardian.model.dto.CheckRequest;
 import com.silicaproxy.packagenameguardian.model.dto.CheckResponse;
@@ -30,7 +31,6 @@ import com.silicaproxy.packagenameguardian.service.sync.ReferenceDataCache;
 import com.silicaproxy.packagenameguardian.service.sync.ReferenceSnapshot;
 import com.silicaproxy.packagenameguardian.service.sync.ReferenceSnapshot.EcosystemSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.NullMarked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,8 +47,6 @@ public class PackageCheckService {
 
     private static final Logger LOG = LoggerFactory.getLogger(PackageCheckService.class);
     private static final String COLD_START_REASON = "Reference data not yet available";
-    // Control characters (CR, LF, other) are replaced with underscore in logs to prevent log forging.
-    private static final Pattern CONTROL_CHARS = Pattern.compile("\\p{Cntrl}");
 
     private final ReferenceDataCache cache;
     private final PackageNameNormalizer normalizer;
@@ -119,7 +117,7 @@ public class PackageCheckService {
         if (LOG.isDebugEnabled() && scores != null) {
             LOG.debug(
                     "Flagged {}/{}: levenshtein={} jaroWinkler={} fuzzyScore={} candidate={}",
-                    ecosystem, sanitizeForLog(request.packageName()), scores.levenshteinDistance(),
+                    ecosystem, LogSanitizer.sanitize(request.packageName()), scores.levenshteinDistance(),
                     scores.jaroWinklerSimilarity(), scores.fuzzyScoreNormalized(),
                     result.flaggedCandidate());
         }
@@ -134,10 +132,6 @@ public class PackageCheckService {
             case "maven" -> properties.similarity().mavenSameGroupIdExemptionEnabled();
             default -> false;
         };
-    }
-
-    private static String sanitizeForLog(String value) {
-        return CONTROL_CHARS.matcher(value).replaceAll("_");
     }
 
     private void recordVerdict(String ecosystem, String verdict) {

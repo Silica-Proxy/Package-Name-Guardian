@@ -28,10 +28,12 @@ import org.jspecify.annotations.Nullable;
  * {@code maven}); a Maven {@code packageName} arrives as {@code groupId:artifactId}. {@code
  * version} is accepted but ignored -- this service only performs name-similarity checks. All
  * fields are validated: missing, blank, or malformed values result in HTTP 400 instead of 500.
+ * {@code packageName} and {@code version} reject control characters and whitespace (no registry
+ * accepts them), which also keeps them from forging log lines.
  */
 @NullMarked
 public record CheckRequest(
-        @NotBlank @Size(max = 400) String packageName,
-        @Nullable String version,
+        @NotBlank @Size(max = 400) @Pattern(regexp = "[^\\p{Cntrl}\\s]+") String packageName,
+        @Nullable @Size(max = 200) @Pattern(regexp = "[^\\p{Cntrl}\\s]*") String version,
         @NotBlank @Pattern(regexp = "npm|pypi|maven") String ecosystem) {
 }

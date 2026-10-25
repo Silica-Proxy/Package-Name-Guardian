@@ -81,6 +81,37 @@ class PackageCheckControllerIntegrationTest extends BaseIntegrationTest {
         return objectMapper.readValue(response.body(), CheckResponse.class);
     }
 
+    private int checkStatus(String body) throws IOException, InterruptedException {
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/v1/check"))
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString()).statusCode();
+    }
+
+    @Test
+    void rejectsAPackageNameContainingAControlCharacter() throws IOException, InterruptedException {
+        assertThat(checkStatus("{\"packageName\":\"lod\\nash\",\"version\":\"1.0.0\",\"ecosystem\":\"npm\"}")).isEqualTo(400);
+    }
+
+    @Test
+    void rejectsAPackageNameContainingWhitespace() throws IOException, InterruptedException {
+        assertThat(checkStatus("{\"packageName\":\"lod ash\",\"version\":\"1.0.0\",\"ecosystem\":\"npm\"}")).isEqualTo(400);
+    }
+
+    @Test
+    void rejectsAnOversizedVersion() throws IOException, InterruptedException {
+        String body = "{\"packageName\":\"lodash\",\"version\":\"" + "1".repeat(10_000) + "\",\"ecosystem\":\"npm\"}";
+
+        assertThat(checkStatus(body)).isEqualTo(400);
+    }
+
+    @Test
+    void rejectsAVersionContainingAControlCharacter() throws IOException, InterruptedException {
+        assertThat(checkStatus("{\"packageName\":\"lodash\",\"version\":\"1.0\\r\\n0\",\"ecosystem\":\"npm\"}")).isEqualTo(400);
+    }
+
     @Test
     void allowsExactMatchOfAPopularPackage() throws IOException, InterruptedException {
         CheckResponse response = check(new CheckRequest("lodash", "4.17.21", "npm"));
