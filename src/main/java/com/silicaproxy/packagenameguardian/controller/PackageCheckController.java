@@ -18,6 +18,7 @@
 package com.silicaproxy.packagenameguardian.controller;
 
 import com.silicaproxy.packagenameguardian.config.RequiresApiKey;
+import com.silicaproxy.packagenameguardian.config.Scope;
 import com.silicaproxy.packagenameguardian.model.dto.CheckRequest;
 import com.silicaproxy.packagenameguardian.model.dto.CheckResponse;
 import com.silicaproxy.packagenameguardian.service.check.PackageCheckService;
@@ -49,7 +50,7 @@ public class PackageCheckController {
         this.checkService = checkService;
     }
 
-    @RequiresApiKey
+    @RequiresApiKey(Scope.CHECK)
     @PostMapping("/check")
     public CheckResponse check(@Valid @RequestBody CheckRequest request) {
         long startTime = System.currentTimeMillis();

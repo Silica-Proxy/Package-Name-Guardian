@@ -41,7 +41,9 @@ configurations {
 dependencies {
 	// BigQuery client -- the whole reason this is a separate subproject: these dependencies must
 	// never end up on the main packagenameguardian app's runtime classpath / bootJar.
-	implementation platform('com.google.cloud:libraries-bom:26.89.0')
+	implementation platform('com.google.cloud:libraries-bom:26.88.1')
+	// libraries-bom pulls Jackson 2.18.3 (vulnerable) -- stay on the 2.18 line, patched release
+	implementation platform('com.fasterxml.jackson:jackson-bom:2.18.12')
 	implementation 'com.google.cloud:google-cloud-bigquery'
 
 	implementation 'org.jspecify:jspecify:1.0.1'
@@ -85,7 +87,7 @@ spotbugsTest { enabled = false }
 spotbugsFunctionalTest { enabled = false }
 
 checkstyle {
-	toolVersion = '13.6.0'
+	toolVersion = '14.3.0'
 	configFile = file("${rootDir}/config/checkstyle.xml")
 	ignoreFailures = false
 	showViolations = true

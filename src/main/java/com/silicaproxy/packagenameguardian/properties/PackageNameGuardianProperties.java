@@ -45,7 +45,11 @@ public record PackageNameGuardianProperties(
         // Proxy sends this as a decision oracle over the network, so this must stay true
         // (with a real apiKey configured) in any deployment reachable outside a trusted network.
         @DefaultValue("true") boolean enabled,
-        @Nullable String apiKey
+        // Key for POST /v1/check, held by SilicaProxy.
+        @Nullable String apiKey,
+        // Separate key for /v1/allowlist, never shared with the proxy: a compromised proxy must not
+        // be able to allowlist a typosquat. Blank fails closed (allowlist API unusable).
+        @Nullable String adminApiKey
     ) {}
 
     public record SimilarityProperties(

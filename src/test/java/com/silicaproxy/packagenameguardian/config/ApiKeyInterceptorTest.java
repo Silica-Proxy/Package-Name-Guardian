@@ -82,7 +82,7 @@ class ApiKeyInterceptorTest {
     void allowsAValidBearerToken() {
         stubProtectedHandlerMethod();
         when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn("Bearer correct-key");
-        when(apiKeyValidator.isAuthorized("correct-key")).thenReturn(true);
+        when(apiKeyValidator.isAuthorized(Scope.CHECK, "correct-key")).thenReturn(true);
 
         boolean result = interceptor.preHandle(request, response, protectedHandlerMethod);
 
@@ -94,7 +94,7 @@ class ApiKeyInterceptorTest {
     void rejectsAMissingAuthorizationHeader() {
         stubProtectedHandlerMethod();
         when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn(null);
-        when(apiKeyValidator.isAuthorized(null)).thenReturn(false);
+        when(apiKeyValidator.isAuthorized(Scope.CHECK, null)).thenReturn(false);
 
         boolean result = interceptor.preHandle(request, response, protectedHandlerMethod);
 
@@ -106,7 +106,7 @@ class ApiKeyInterceptorTest {
     void rejectsAHeaderThatIsNotAWellFormedBearerToken() {
         stubProtectedHandlerMethod();
         when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn("not-a-bearer-token");
-        when(apiKeyValidator.isAuthorized(null)).thenReturn(false);
+        when(apiKeyValidator.isAuthorized(Scope.CHECK, null)).thenReturn(false);
 
         boolean result = interceptor.preHandle(request, response, protectedHandlerMethod);
 
@@ -114,21 +114,39 @@ class ApiKeyInterceptorTest {
         verify(response).setStatus(HttpStatus.UNAUTHORIZED.value());
     }
 
+    @Test
+    void validatesAgainstTheScopeDeclaredOnTheHandler() {
+        when(protectedHandlerMethod.getMethodAnnotation(RequiresApiKey.class))
+                .thenReturn(findRequiresApiKeyAnnotation("annotatedAdmin"));
+        when(request.getHeader(HttpHeaders.AUTHORIZATION)).thenReturn("Bearer admin-key");
+        when(apiKeyValidator.isAuthorized(Scope.ADMIN, "admin-key")).thenReturn(true);
+
+        assertThat(interceptor.preHandle(request, response, protectedHandlerMethod)).isTrue();
+    }
+
     private void stubProtectedHandlerMethod() {
         when(protectedHandlerMethod.getMethodAnnotation(RequiresApiKey.class)).thenReturn(REQUIRES_API_KEY_ANNOTATION);
     }
 
     private static RequiresApiKey findRequiresApiKeyAnnotation() {
+        return findRequiresApiKeyAnnotation("annotated");
+    }
+
+    private static RequiresApiKey findRequiresApiKeyAnnotation(String methodName) {
         try {
-            return RequiresApiKeyFixture.class.getMethod("annotated").getAnnotation(RequiresApiKey.class);
+            return RequiresApiKeyFixture.class.getMethod(methodName).getAnnotation(RequiresApiKey.class);
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException(e);
         }
     }
 
     private static final class RequiresApiKeyFixture {
-        @RequiresApiKey
+        @RequiresApiKey(Scope.CHECK)
         public void annotated() {
+        }
+
+        @RequiresApiKey(Scope.ADMIN)
+        public void annotatedAdmin() {
         }
     }
 }
