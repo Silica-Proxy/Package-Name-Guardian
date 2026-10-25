@@ -38,7 +38,7 @@ import org.springframework.stereotype.Component;
  * then again on a fixed delay via {@link Scheduled} so an allowlist entry added through the admin
  * API becomes effective without a restart. If {@code reference_package} is empty (a fresh
  * deployment whose Flyway migration hasn't seeded any rows yet), {@code POST /v1/check} returns
- * {@code BLOCKED} "reference data not yet available" until a reload finds rows. A reload that
+ * {@code 503} "reference data not yet available" until a reload finds rows. A reload that
  * fails (e.g. a transient DB outage) logs and keeps serving the previous snapshot generation
  * rather than clearing the cache.
  */
