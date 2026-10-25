@@ -34,12 +34,17 @@ import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.NullMarked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Backs {@code POST /v1/check}. {@code BLOCKED}/"reference data not yet available" is returned
- * only before the very first sync ever completes (cache still empty) -- never on a routine daily
- * re-sync, even if that sync fails, since the previous generation keeps serving.
+ * Backs {@code POST /v1/check}. A {@code 503 Service Unavailable} "reference data not yet
+ * available" is raised only before the very first sync ever completes (cache still empty) -- never
+ * on a routine daily re-sync, even if that sync fails, since the previous generation keeps serving.
+ * It is deliberately not a {@code BLOCKED} verdict: callers persist {@code BLOCKED} as a permanent
+ * verdict, whereas a 503 is treated as a transport error (fail-open/closed per caller config) and
+ * never stored.
  */
 @Service
 @NullMarked
@@ -74,8 +79,9 @@ public class PackageCheckService {
     public CheckResponse check(CheckRequest request) {
         ReferenceSnapshot snapshot = cache.current();
         if (snapshot == null) {
-            recordVerdict(request.ecosystem(), Metrics.VERDICT_BLOCKED);
-            return CheckResponse.blocked(COLD_START_REASON);
+            meterRegistry.counter(Metrics.CHECK_UNAVAILABLE_METRIC, Metrics.TAG_ECOSYSTEM, request.ecosystem())
+                    .increment();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, COLD_START_REASON);
         }
 
         String ecosystem = request.ecosystem();

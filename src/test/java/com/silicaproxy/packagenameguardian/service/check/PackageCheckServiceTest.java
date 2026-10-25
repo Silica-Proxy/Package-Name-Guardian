@@ -18,6 +18,7 @@
 package com.silicaproxy.packagenameguardian.service.check;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -46,6 +47,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class PackageCheckServiceTest {
@@ -77,13 +80,14 @@ class PackageCheckServiceTest {
     }
 
     @Test
-    void returnsBlockedWithColdStartReasonWhenCacheIsEmpty() {
+    void throwsServiceUnavailableWhenCacheIsEmpty() {
         when(cache.current()).thenReturn(null);
 
-        CheckResponse response = checkService.check(new CheckRequest("lodahs", "1.0.0", "npm"));
-
-        assertThat(response.verdict()).isEqualTo(Verdict.BLOCKED);
-        assertThat(response.reason()).isEqualTo("Reference data not yet available");
+        assertThatThrownBy(() -> checkService.check(new CheckRequest("lodahs", "1.0.0", "npm")))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+                    assertThat(e.getReason()).isEqualTo("Reference data not yet available");
+                });
     }
 
     @Test

@@ -33,6 +33,7 @@ public final class Metrics {
     public static final String TAG_ECOSYSTEM = "ecosystem";
     public static final String TAG_VERDICT = "verdict";
 
+    public static final String CHECK_UNAVAILABLE_METRIC = "packagenameguardian.check.unavailable";
     public static final String CHECK_VERDICTS_METRIC = "packagenameguardian.check.verdicts";
     public static final String VERDICT_ALLOWED = "ALLOWED";
     public static final String VERDICT_ALLOWED_VIA_ALLOWLIST = "ALLOWED_VIA_ALLOWLIST";

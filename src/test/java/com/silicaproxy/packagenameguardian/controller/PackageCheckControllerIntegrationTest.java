@@ -26,6 +26,7 @@ import com.silicaproxy.packagenameguardian.model.dto.CheckResponse;
 import com.silicaproxy.packagenameguardian.model.dto.Verdict;
 import com.silicaproxy.packagenameguardian.model.entity.ReferencePackage;
 import com.silicaproxy.packagenameguardian.service.sync.ReferenceDataCache;
+import com.silicaproxy.packagenameguardian.service.sync.ReferenceSnapshot;
 import com.silicaproxy.packagenameguardian.service.sync.ReferenceSnapshotFactory;
 import java.io.IOException;
 import java.net.URI;
@@ -33,11 +34,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class PackageCheckControllerIntegrationTest extends BaseIntegrationTest {
 
@@ -88,6 +91,14 @@ class PackageCheckControllerIntegrationTest extends BaseIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString()).statusCode();
+    }
+
+    @Test
+    void returns503AndNoBlockedVerdictWhileCacheIsEmpty() throws IOException, InterruptedException {
+        ReflectionTestUtils.setField(cache, "current", new AtomicReference<ReferenceSnapshot>());
+
+        assertThat(checkStatus("{\"packageName\":\"lodahs\",\"version\":\"1.0.0\",\"ecosystem\":\"npm\"}"))
+                .isEqualTo(503);
     }
 
     @Test
