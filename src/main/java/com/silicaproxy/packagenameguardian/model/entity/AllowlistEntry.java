@@ -19,17 +19,21 @@ package com.silicaproxy.packagenameguardian.model.entity;
 
 import java.time.Instant;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Row of {@code package_allowlist} -- a real package name for one ecosystem that operators have
  * confirmed is not a typosquat, even if it would otherwise be flagged by {@code SimilarityScanner}.
  * Unlike {@code reference_package}, this table is written at runtime via {@code
  * AllowlistController}. {@code packageName} is the bare name, or {@code groupId:artifactId} for
- * Maven.
+ * Maven. {@code createdBy} and {@code reason} are the audit trail of who allowlisted the entry and
+ * why; both are null for rows that predate that trail.
  */
 @NullMarked
 public record AllowlistEntry(
         String ecosystem,
         String packageName,
-        Instant createdAt) {
+        Instant createdAt,
+        @Nullable String createdBy,
+        @Nullable String reason) {
 }

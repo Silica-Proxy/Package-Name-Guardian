@@ -17,7 +17,9 @@
 
 package com.silicaproxy.packagenameguardian.controller;
 
+import com.silicaproxy.packagenameguardian.config.LogSanitizer;
 import com.silicaproxy.packagenameguardian.config.RequiresApiKey;
+import com.silicaproxy.packagenameguardian.config.Scope;
 import com.silicaproxy.packagenameguardian.dao.repository.AllowlistRepository;
 import com.silicaproxy.packagenameguardian.model.dto.AllowlistEntryRequest;
 import com.silicaproxy.packagenameguardian.model.dto.AllowlistEntryResponse;
@@ -25,6 +27,8 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Locale;
 import org.jspecify.annotations.NullMarked;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -48,13 +52,15 @@ import org.springframework.web.server.ResponseStatusException;
 @NullMarked
 public class AllowlistController {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AllowlistController.class);
+
     private final AllowlistRepository allowlistRepository;
 
     public AllowlistController(AllowlistRepository allowlistRepository) {
         this.allowlistRepository = allowlistRepository;
     }
 
-    @RequiresApiKey
+    @RequiresApiKey(Scope.ADMIN)
     @GetMapping
     public List<AllowlistEntryResponse> list(@RequestParam String ecosystem) {
         return allowlistRepository.findByEcosystem(ecosystem.toUpperCase(Locale.ROOT)).stream()
@@ -62,15 +68,17 @@ public class AllowlistController {
                 .toList();
     }
 
-    @RequiresApiKey
+    @RequiresApiKey(Scope.ADMIN)
     @PostMapping
     public AllowlistEntryResponse add(@Valid @RequestBody AllowlistEntryRequest request) {
         try {
-            allowlistRepository.insert(request.ecosystem().toUpperCase(Locale.ROOT), request.packageName());
+            allowlistRepository.insert(request.ecosystem().toUpperCase(Locale.ROOT), request.packageName(),
+                    request.createdBy(), request.reason());
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "'%s' is already allowlisted for %s".formatted(request.packageName(), request.ecosystem()));
         }
+        logAudit("allowlist.add", request);
         return allowlistRepository.findByEcosystem(request.ecosystem().toUpperCase(Locale.ROOT)).stream()
                 .filter(entry -> entry.packageName().equals(request.packageName()))
                 .findFirst()
@@ -78,7 +86,7 @@ public class AllowlistController {
                 .orElseThrow();
     }
 
-    @RequiresApiKey
+    @RequiresApiKey(Scope.ADMIN)
     @DeleteMapping
     public void remove(@Valid @RequestBody AllowlistEntryRequest request) {
         int deleted = allowlistRepository.delete(request.ecosystem().toUpperCase(Locale.ROOT), request.packageName());
@@ -86,5 +94,13 @@ public class AllowlistController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND,
                     "'%s' is not allowlisted for %s".formatted(request.packageName(), request.ecosystem()));
         }
+        logAudit("allowlist.remove", request);
+    }
+
+    // Audit trail of every allowlist mutation. All values are caller-supplied, hence sanitized.
+    private static void logAudit(String action, AllowlistEntryRequest request) {
+        LOG.info("{} ecosystem={} name={} by={} reason={}", action,
+                LogSanitizer.sanitize(request.ecosystem()), LogSanitizer.sanitize(request.packageName()),
+                LogSanitizer.sanitize(request.createdBy()), LogSanitizer.sanitize(request.reason()));
     }
 }

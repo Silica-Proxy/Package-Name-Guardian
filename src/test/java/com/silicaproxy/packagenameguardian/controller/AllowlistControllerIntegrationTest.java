@@ -28,13 +28,18 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.MediaType;
 
 class AllowlistControllerIntegrationTest extends BaseIntegrationTest {
 
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     // Same rationale as PackageCheckControllerIntegrationTest: a plain local ObjectMapper, not the
     // Boot-autoconfigured Jackson 3 one, since these DTOs only need default record (de)serialization.
@@ -69,7 +74,7 @@ class AllowlistControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void addingThenListingShowsTheNewEntry() throws IOException, InterruptedException {
-        HttpResponse<String> addResponse = post(new AllowlistEntryRequest("react-dnd", "npm"));
+        HttpResponse<String> addResponse = post(new AllowlistEntryRequest("react-dnd", "npm", "reviewed", "alice"));
         assertThat(addResponse.statusCode()).isEqualTo(200);
 
         HttpResponse<String> listResponse = list("npm");
@@ -78,19 +83,35 @@ class AllowlistControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void addingTheSameEntryTwiceIsRejectedAsAConflict() throws IOException, InterruptedException {
-        assertThat(post(new AllowlistEntryRequest("duplicate-pkg", "npm")).statusCode()).isEqualTo(200);
+    void addedEntryCarriesReasonAndCreatedByInResponseAndDatabase() throws IOException, InterruptedException {
+        HttpResponse<String> addResponse = post(new AllowlistEntryRequest("audited-pkg", "npm", "real pkg, reviewed", "alice"));
 
-        HttpResponse<String> secondAdd = post(new AllowlistEntryRequest("duplicate-pkg", "npm"));
+        assertThat(addResponse.statusCode()).isEqualTo(200);
+        assertThat(addResponse.body()).contains("\"reason\":\"real pkg, reviewed\"").contains("\"createdBy\":\"alice\"");
+        assertThat(jdbcTemplate.queryForMap(
+                "SELECT created_by, reason FROM package_allowlist WHERE package_name = 'audited-pkg'"))
+                .containsEntry("created_by", "alice").containsEntry("reason", "real pkg, reviewed");
+    }
+
+    @Test
+    void addingWithoutAReasonIsRejected() throws IOException, InterruptedException {
+        assertThat(post(new AllowlistEntryRequest("no-reason-pkg", "npm", "", null)).statusCode()).isEqualTo(400);
+    }
+
+    @Test
+    void addingTheSameEntryTwiceIsRejectedAsAConflict() throws IOException, InterruptedException {
+        assertThat(post(new AllowlistEntryRequest("duplicate-pkg", "npm", "reviewed", "alice")).statusCode()).isEqualTo(200);
+
+        HttpResponse<String> secondAdd = post(new AllowlistEntryRequest("duplicate-pkg", "npm", "reviewed", "alice"));
 
         assertThat(secondAdd.statusCode()).isEqualTo(409);
     }
 
     @Test
     void removingThenRemovingAgainReturnsNotFound() throws IOException, InterruptedException {
-        assertThat(post(new AllowlistEntryRequest("removable-pkg", "npm")).statusCode()).isEqualTo(200);
+        assertThat(post(new AllowlistEntryRequest("removable-pkg", "npm", "reviewed", "alice")).statusCode()).isEqualTo(200);
 
-        assertThat(delete(new AllowlistEntryRequest("removable-pkg", "npm")).statusCode()).isEqualTo(200);
-        assertThat(delete(new AllowlistEntryRequest("removable-pkg", "npm")).statusCode()).isEqualTo(404);
+        assertThat(delete(new AllowlistEntryRequest("removable-pkg", "npm", "reviewed", "alice")).statusCode()).isEqualTo(200);
+        assertThat(delete(new AllowlistEntryRequest("removable-pkg", "npm", "reviewed", "alice")).statusCode()).isEqualTo(404);
     }
 }

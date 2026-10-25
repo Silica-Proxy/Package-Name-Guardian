@@ -73,7 +73,7 @@ class ReferenceDataStartupLoaderTest {
         when(referencePackageRepository.findAll()).thenReturn(List.of(
                 new ReferencePackage("NPM", "react-dom", 1000, 1)));
         when(allowlistRepository.findAll()).thenReturn(List.of(
-                new AllowlistEntry("NPM", "react-dnd", java.time.Instant.now())));
+                new AllowlistEntry("NPM", "react-dnd", java.time.Instant.now(), null, null)));
 
         loader.run(null);
 

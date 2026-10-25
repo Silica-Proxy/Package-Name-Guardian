@@ -53,6 +53,8 @@ packagenameguardian:
     # api-key configured) in any deployment reachable outside a trusted network.
     enabled: "${PACKAGENAMEGUARDIAN_SECURITY_ENABLED:true}"
     api-key: "${PACKAGENAMEGUARDIAN_API_KEY:}"
+    # Separate key for /v1/allowlist (never given to the proxy). Blank = allowlist API refuses all.
+    admin-api-key: "${PACKAGENAMEGUARDIAN_ADMIN_API_KEY:}"
 
   similarity:
     # A candidate whose npm @scope already has at least one popular package in the reference set

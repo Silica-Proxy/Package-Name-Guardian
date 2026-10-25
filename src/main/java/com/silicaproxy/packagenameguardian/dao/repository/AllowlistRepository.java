@@ -19,10 +19,12 @@ package com.silicaproxy.packagenameguardian.dao.repository;
 
 import com.silicaproxy.packagenameguardian.model.entity.AllowlistEntry;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -44,7 +46,7 @@ public class AllowlistRepository {
 
     public List<AllowlistEntry> findAll() {
         List<Map<String, Object>> rows = jdbcClient.sql("""
-                SELECT ecosystem, package_name, created_at
+                SELECT ecosystem, package_name, created_at, created_by, reason
                 FROM package_allowlist
                 """)
                 .query()
@@ -55,14 +57,16 @@ public class AllowlistRepository {
             result.add(new AllowlistEntry(
                     (String) row.get("ecosystem"),
                     (String) row.get("package_name"),
-                    ((Timestamp) row.get("created_at")).toInstant()));
+                    ((Timestamp) row.get("created_at")).toInstant(),
+                    (String) row.get("created_by"),
+                    (String) row.get("reason")));
         }
         return result;
     }
 
     public List<AllowlistEntry> findByEcosystem(String ecosystem) {
         List<Map<String, Object>> rows = jdbcClient.sql("""
-                SELECT ecosystem, package_name, created_at
+                SELECT ecosystem, package_name, created_at, created_by, reason
                 FROM package_allowlist
                 WHERE ecosystem = :ecosystem
                 """)
@@ -75,18 +79,22 @@ public class AllowlistRepository {
             result.add(new AllowlistEntry(
                     (String) row.get("ecosystem"),
                     (String) row.get("package_name"),
-                    ((Timestamp) row.get("created_at")).toInstant()));
+                    ((Timestamp) row.get("created_at")).toInstant(),
+                    (String) row.get("created_by"),
+                    (String) row.get("reason")));
         }
         return result;
     }
 
-    public void insert(String ecosystem, String packageName) {
+    public void insert(String ecosystem, String packageName, @Nullable String createdBy, String reason) {
         jdbcClient.sql("""
-                INSERT INTO package_allowlist (ecosystem, package_name)
-                VALUES (:ecosystem, :packageName)
+                INSERT INTO package_allowlist (ecosystem, package_name, created_by, reason)
+                VALUES (:ecosystem, :packageName, :createdBy, :reason)
                 """)
                 .param("ecosystem", ecosystem)
                 .param("packageName", packageName)
+                .param("createdBy", createdBy, Types.VARCHAR)
+                .param("reason", reason)
                 .update();
     }
 

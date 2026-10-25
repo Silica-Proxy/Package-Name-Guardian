@@ -33,8 +33,12 @@ class ApiKeyValidatorTest {
     private static final AllowlistProperties ALLOWLIST = new AllowlistProperties(60000L);
 
     private ApiKeyValidator validatorFor(boolean enabled, String configuredApiKey) {
+        return validatorFor(enabled, configuredApiKey, "admin-key");
+    }
+
+    private ApiKeyValidator validatorFor(boolean enabled, String configuredApiKey, String adminApiKey) {
         PackageNameGuardianProperties properties = new PackageNameGuardianProperties(
-                REFERENCE_DATA, new SecurityProperties(enabled, configuredApiKey), SIMILARITY, ALLOWLIST);
+                REFERENCE_DATA, new SecurityProperties(enabled, configuredApiKey, adminApiKey), SIMILARITY, ALLOWLIST);
         return new ApiKeyValidator(properties);
     }
 
@@ -42,36 +46,59 @@ class ApiKeyValidatorTest {
     void authorizesAnyRequestWhenSecurityIsDisabled() {
         ApiKeyValidator validator = validatorFor(false, "");
 
-        assertThat(validator.isAuthorized(null)).isTrue();
-        assertThat(validator.isAuthorized("anything")).isTrue();
+        assertThat(validator.isAuthorized(Scope.CHECK, null)).isTrue();
+        assertThat(validator.isAuthorized(Scope.CHECK, "anything")).isTrue();
     }
 
     @Test
     void authorizesTheConfiguredKey() {
         ApiKeyValidator validator = validatorFor(true, "correct-key");
 
-        assertThat(validator.isAuthorized("correct-key")).isTrue();
+        assertThat(validator.isAuthorized(Scope.CHECK, "correct-key")).isTrue();
     }
 
     @Test
     void rejectsAWrongKey() {
         ApiKeyValidator validator = validatorFor(true, "correct-key");
 
-        assertThat(validator.isAuthorized("wrong-key")).isFalse();
+        assertThat(validator.isAuthorized(Scope.CHECK, "wrong-key")).isFalse();
     }
 
     @Test
     void rejectsAMissingKey() {
         ApiKeyValidator validator = validatorFor(true, "correct-key");
 
-        assertThat(validator.isAuthorized(null)).isFalse();
+        assertThat(validator.isAuthorized(Scope.CHECK, null)).isFalse();
     }
 
     @Test
     void failsClosedWhenNoApiKeyIsConfigured() {
         ApiKeyValidator validator = validatorFor(true, "");
 
-        assertThat(validator.isAuthorized("")).isFalse();
-        assertThat(validator.isAuthorized("anything")).isFalse();
+        assertThat(validator.isAuthorized(Scope.CHECK, "")).isFalse();
+        assertThat(validator.isAuthorized(Scope.CHECK, "anything")).isFalse();
+    }
+
+    @Test
+    void checkKeyIsRejectedForAdminScope() {
+        ApiKeyValidator validator = validatorFor(true, "correct-key");
+
+        assertThat(validator.isAuthorized(Scope.ADMIN, "correct-key")).isFalse();
+    }
+
+    @Test
+    void adminKeyIsAcceptedForAdminScopeOnly() {
+        ApiKeyValidator validator = validatorFor(true, "correct-key");
+
+        assertThat(validator.isAuthorized(Scope.ADMIN, "admin-key")).isTrue();
+        assertThat(validator.isAuthorized(Scope.CHECK, "admin-key")).isFalse();
+    }
+
+    @Test
+    void failsClosedForAdminScopeWhenNoAdminKeyIsConfigured() {
+        ApiKeyValidator validator = validatorFor(true, "correct-key", "");
+
+        assertThat(validator.isAuthorized(Scope.ADMIN, "")).isFalse();
+        assertThat(validator.isAuthorized(Scope.ADMIN, "correct-key")).isFalse();
     }
 }

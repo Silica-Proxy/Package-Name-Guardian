@@ -102,11 +102,11 @@ Some real, legitimately different packages are as edit-distance-close to each ot
 
 A candidate name can be individually allowlisted per ecosystem, for exactly the false-positive shape described above: a real, known package that happens to be edit-distance-close to a popular one with no namespace signal to exempt it automatically. Allowlisted names are checked (after normalization, same as everywhere else) **before** the similarity scan runs, so a match there short-circuits straight to `ALLOWED` without ever scoring against the reference set.
 
-Entries live in the `package_allowlist` table (schema in `V2__allowlist_schema.sql`, unlike `reference_package` this one *is* written at runtime) and are managed via a small admin API, protected by the same `Authorization: Bearer {key}` as `/v1/check`:
+Entries live in the `package_allowlist` table (schema in `V2__allowlist_schema.sql`, unlike `reference_package` this one *is* written at runtime) and are managed via a small admin API, protected by a **separate admin key** (`PACKAGENAMEGUARDIAN_ADMIN_API_KEY`, sent as `Authorization: Bearer {admin-key}`). The `/v1/check` key is rejected here (401) and the admin key is rejected on `/v1/check`, so a compromised proxy cannot allowlist a typosquat. Every add/remove is recorded (`created_by`, `reason`) and logged at INFO as `allowlist.add` / `allowlist.remove`:
 
 ```
-POST   /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm" }   -> 200 + the created entry, 409 if already allowlisted
-DELETE /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm" }   -> 200, 404 if not found
+POST   /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm", "reason": "real package, reviewed", "createdBy": "alice" }   -> 200 + the created entry (with reason/createdBy), 409 if already allowlisted
+DELETE /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm", "reason": "real package, reviewed", "createdBy": "alice" }   -> 200, 404 if not found
 GET    /v1/allowlist?ecosystem=npm                                          -> 200 + every allowlisted entry for that ecosystem
 ```
 
@@ -164,11 +164,11 @@ Response: { "verdict": "ALLOWED" | "BLOCKED", "reason": "<string, present if BLO
 
 ### `POST` / `DELETE` / `GET /v1/allowlist`
 
-Admin API for `package_allowlist` — see [Allowlist](#4-allowlist). Same `Authorization: Bearer {key}` protection as `/v1/check`.
+Admin API for `package_allowlist` — see [Allowlist](#4-allowlist). Protected by the separate admin key (`PACKAGENAMEGUARDIAN_ADMIN_API_KEY`); the `/v1/check` key is rejected with 401.
 
 ```
-POST   /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm" }   -> 200 + created entry, 409 if already allowlisted
-DELETE /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm" }   -> 200, 404 if not found
+POST   /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm", "reason": "real package, reviewed", "createdBy": "alice" }   -> 200 + created entry (with reason/createdBy), 409 if already allowlisted
+DELETE /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm", "reason": "real package, reviewed", "createdBy": "alice" }   -> 200, 404 if not found
 GET    /v1/allowlist?ecosystem=npm                                          -> 200 + every allowlisted entry for that ecosystem
 ```
 
@@ -332,7 +332,8 @@ Commit the regenerated file through a normal reviewed PR (the scheduled `refresh
 | **Reference data** | `packagenameguardian.reference-data.min-acceptable-count-per-ecosystem` | `5000` | Health-check floor — fewer rows than this for any ecosystem reports `DOWN` |
 | | `packagenameguardian.reference-data.freshness-max-age-hours` | `1512` (63 days) | How stale the seed migration's last apply can get before reporting `DEGRADED` |
 | **Security** | `packagenameguardian.security.enabled` | `true` | Require `Authorization: Bearer {api-key}` on `POST /v1/check` |
-| | `packagenameguardian.security.api-key` | _(empty)_ | Fails closed if enabled with no key set |
+| | `packagenameguardian.security.api-key` | _(empty)_ | Key for `POST /v1/check` (held by SilicaProxy). Fails closed if enabled with no key set |
+| | `packagenameguardian.security.admin-api-key` | _(empty)_ | Separate key for `/v1/allowlist` — must **not** be given to the proxy. Fails closed if empty; the check key is not accepted there, nor the admin key on `/v1/check` |
 | **Similarity** | `packagenameguardian.similarity.npm-same-scope-exemption-enabled` | `true` | Exempt candidates sharing a known npm `@scope` |
 | | `packagenameguardian.similarity.maven-same-group-id-exemption-enabled` | `true` | Exempt candidates sharing a known Maven `groupId` |
 | **Allowlist** | `packagenameguardian.allowlist.refresh-interval-ms` | `60000` | How often `package_allowlist` (and `reference_package`) is reloaded into the in-memory snapshot |
@@ -349,7 +350,8 @@ Pass these as `-e` flags to `docker run`, or use in a `docker-compose.yml` `envi
 | **Reference data** | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_MIN_ACCEPTABLE_COUNT_PER_ECOSYSTEM` | `5000` | Health-check floor — fewer rows than this for any ecosystem reports `DOWN` |
 | | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_FRESHNESS_MAX_AGE_HOURS` | `1512` (63 days) | How stale the seed migration's last apply can get before reporting `DEGRADED` |
 | **Security** | `PACKAGENAMEGUARDIAN_SECURITY_ENABLED` | `true` | Require `Authorization: Bearer {api-key}` on `POST /v1/check` |
-| | `PACKAGENAMEGUARDIAN_SECURITY_API_KEY` | _(empty)_ | Fails closed if enabled with no key set |
+| | `PACKAGENAMEGUARDIAN_API_KEY` | _(empty)_ | Key for `POST /v1/check`. Fails closed if enabled with no key set |
+| | `PACKAGENAMEGUARDIAN_ADMIN_API_KEY` | _(empty)_ | Key for `/v1/allowlist`, distinct from the check key. Fails closed if empty |
 | **Similarity** | `PACKAGENAMEGUARDIAN_SIMILARITY_NPM_SAME_SCOPE_EXEMPTION_ENABLED` | `true` | Exempt candidates sharing a known npm `@scope` |
 | | `PACKAGENAMEGUARDIAN_SIMILARITY_MAVEN_SAME_GROUP_ID_EXEMPTION_ENABLED` | `true` | Exempt candidates sharing a known Maven `groupId` |
 | **Allowlist** | `PACKAGENAMEGUARDIAN_ALLOWLIST_REFRESH_INTERVAL_MS` | `60000` | How often `package_allowlist` (and `reference_package`) is reloaded into the in-memory snapshot |
