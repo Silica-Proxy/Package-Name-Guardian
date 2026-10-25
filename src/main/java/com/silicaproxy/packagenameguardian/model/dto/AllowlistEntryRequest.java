@@ -32,7 +32,7 @@ import org.jspecify.annotations.Nullable;
  */
 @NullMarked
 public record AllowlistEntryRequest(
-        @NotBlank @Size(max = 400) String packageName,
+        @NotBlank @Size(max = 400) @Pattern(regexp = "[^\\p{Cntrl}\\s]+") String packageName,
         @NotBlank @Pattern(regexp = "npm|pypi|maven") String ecosystem,
         @NotBlank @Size(max = 500) String reason,
         @Nullable @Size(max = 100) String createdBy) {

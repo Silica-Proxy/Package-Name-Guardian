@@ -17,15 +17,14 @@
 
 package com.silicaproxy.packagenameguardian.controller;
 
+import com.silicaproxy.packagenameguardian.config.LogSanitizer;
 import com.silicaproxy.packagenameguardian.config.RequiresApiKey;
 import com.silicaproxy.packagenameguardian.config.Scope;
 import com.silicaproxy.packagenameguardian.model.dto.CheckRequest;
 import com.silicaproxy.packagenameguardian.model.dto.CheckResponse;
 import com.silicaproxy.packagenameguardian.service.check.PackageCheckService;
 import jakarta.validation.Valid;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.NullMarked;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,11 +38,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class PackageCheckController {
 
     private static final Logger LOG = LoggerFactory.getLogger(PackageCheckController.class);
-    // Same convention as PackageCheckService.sanitizeForLog: packageName/version are unvalidated
-    // user input beyond size/blank checks, so raw control characters (CR, LF, ...) could forge
-    // fake log lines (FindSecBugs CRLF_INJECTION_LOGS).
-    private static final Pattern CONTROL_CHARS = Pattern.compile("\\p{Cntrl}");
-
     private final PackageCheckService checkService;
 
     public PackageCheckController(PackageCheckService checkService) {
@@ -56,17 +50,13 @@ public class PackageCheckController {
         long startTime = System.currentTimeMillis();
         if (LOG.isDebugEnabled()) {
             LOG.debug("Received request to check package : name={}, version={}, ecosystem={}",
-                    sanitizeForLog(request.packageName()), sanitizeForLog(request.version()), sanitizeForLog(request.ecosystem()));
+                    LogSanitizer.sanitize(request.packageName()), LogSanitizer.sanitize(request.version()), LogSanitizer.sanitize(request.ecosystem()));
         }
         CheckResponse checkResponse = checkService.check(request);
         long executionTimeMs = System.currentTimeMillis() - startTime;
         LOG.info("Final decision for {}/{} (ecosystem={}) : RESULT={} (Reason: {}) [Calculated in {}ms]",
-                sanitizeForLog(request.packageName()), sanitizeForLog(request.version()), sanitizeForLog(request.ecosystem()),
-                checkResponse.verdict(), checkResponse.reason(), executionTimeMs);
+                LogSanitizer.sanitize(request.packageName()), LogSanitizer.sanitize(request.version()), LogSanitizer.sanitize(request.ecosystem()),
+                checkResponse.verdict(), LogSanitizer.sanitize(checkResponse.reason()), executionTimeMs);
         return checkResponse;
-    }
-
-    private static @Nullable String sanitizeForLog(@Nullable String value) {
-        return value == null ? null : CONTROL_CHARS.matcher(value).replaceAll("_");
     }
 }
