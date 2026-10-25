@@ -34,11 +34,15 @@ public class ApiKeyValidator {
         this.properties = properties;
     }
 
-    public boolean isAuthorized(@Nullable String providedKey) {
+    public boolean isAuthorized(Scope scope, @Nullable String providedKey) {
         if (!properties.security().enabled()) {
             return true;
         }
-        return constantTimeEquals(properties.security().apiKey(), providedKey);
+        String expectedKey = switch (scope) {
+            case CHECK -> properties.security().apiKey();
+            case ADMIN -> properties.security().adminApiKey();
+        };
+        return constantTimeEquals(expectedKey, providedKey);
     }
 
     // Fails closed (returns false) when no key is configured: a missing secret must not

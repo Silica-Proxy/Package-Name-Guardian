@@ -52,7 +52,7 @@ class PackageCheckServiceTest {
 
     private static final PackageNameGuardianProperties PROPERTIES = new PackageNameGuardianProperties(
             new ReferenceDataProperties(5000, 1512L),
-            new SecurityProperties(true, "test-api-key"),
+            new SecurityProperties(true, "test-api-key", "test-admin-api-key"),
             new SimilarityProperties(true, true),
             new AllowlistProperties(60000L));
 

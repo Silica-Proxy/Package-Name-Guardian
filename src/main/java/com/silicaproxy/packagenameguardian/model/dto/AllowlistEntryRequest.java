@@ -21,14 +21,19 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Body of {@code POST /v1/allowlist} and {@code DELETE /v1/allowlist}. {@code ecosystem} arrives
  * lowercase ({@code npm}/{@code pypi}/{@code maven}), same convention as {@link CheckRequest}; a
- * Maven {@code packageName} arrives as {@code groupId:artifactId}.
+ * Maven {@code packageName} arrives as {@code groupId:artifactId}. {@code reason} (why the entry
+ * is added or removed) is mandatory for the audit trail; {@code createdBy} (who is acting) is
+ * optional.
  */
 @NullMarked
 public record AllowlistEntryRequest(
         @NotBlank @Size(max = 400) @Pattern(regexp = "[^\\p{Cntrl}\\s]+") String packageName,
-        @NotBlank @Pattern(regexp = "npm|pypi|maven") String ecosystem) {
+        @NotBlank @Pattern(regexp = "npm|pypi|maven") String ecosystem,
+        @NotBlank @Size(max = 500) String reason,
+        @Nullable @Size(max = 100) String createdBy) {
 }

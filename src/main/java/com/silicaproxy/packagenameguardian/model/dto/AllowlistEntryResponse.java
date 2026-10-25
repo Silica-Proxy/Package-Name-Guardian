@@ -21,16 +21,19 @@ import com.silicaproxy.packagenameguardian.model.entity.AllowlistEntry;
 import java.time.Instant;
 import java.util.Locale;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Response body of {@code GET /v1/allowlist} and {@code POST /v1/allowlist}. {@code ecosystem} is
  * echoed lowercase, matching every other ecosystem-carrying DTO in this API.
  */
 @NullMarked
-public record AllowlistEntryResponse(String ecosystem, String packageName, Instant createdAt) {
+public record AllowlistEntryResponse(
+        String ecosystem, String packageName, Instant createdAt, @Nullable String createdBy, @Nullable String reason) {
 
     public static AllowlistEntryResponse from(AllowlistEntry entry) {
         return new AllowlistEntryResponse(
-                entry.ecosystem().toLowerCase(Locale.ROOT), entry.packageName(), entry.createdAt());
+                entry.ecosystem().toLowerCase(Locale.ROOT), entry.packageName(), entry.createdAt(),
+                entry.createdBy(), entry.reason());
     }
 }
