@@ -32,14 +32,25 @@ class ReferenceDataSqlGeneratorTest {
     private static final Instant GENERATED_AT = Instant.parse("2026-08-01T02:30:00Z");
 
     @Test
-    void emitsDeleteBeforeAnyInsert() {
+    void emitsTruncateBeforeAnyInsert() {
         String sql = ReferenceDataSqlGenerator.buildSql(
                 List.of(new PackageRow("NPM", "lodash", 1000, 1)), GENERATED_AT);
 
-        int deleteIndex = sql.indexOf("DELETE FROM reference_package;");
+        int truncateIndex = sql.indexOf("TRUNCATE reference_package RESTART IDENTITY;");
         int insertIndex = sql.indexOf("INSERT INTO reference_package");
-        assertThat(deleteIndex).isPositive();
-        assertThat(insertIndex).isGreaterThan(deleteIndex);
+        assertThat(truncateIndex).isPositive();
+        assertThat(insertIndex).isGreaterThan(truncateIndex);
+        assertThat(sql).doesNotContain("DELETE FROM reference_package");
+    }
+
+    @Test
+    void recordsGeneratedAtInReferenceDataMeta() {
+        String sql = ReferenceDataSqlGenerator.buildSql(
+                List.of(new PackageRow("NPM", "lodash", 1000, 1)), GENERATED_AT);
+
+        assertThat(sql).contains(
+                "INSERT INTO reference_data_meta (generated_at) VALUES ('2026-08-01T02:30:00Z')\n"
+                        + "    ON CONFLICT (singleton) DO UPDATE SET generated_at = EXCLUDED.generated_at;");
     }
 
     @Test

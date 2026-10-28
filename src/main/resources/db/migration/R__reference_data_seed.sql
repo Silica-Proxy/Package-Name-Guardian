@@ -5,7 +5,10 @@
 -- Generated at: 2026-10-01T08:30:00.478252137Z
 -- Row counts: MAVEN=10000, NPM=10000, PYPI=10000
 
-DELETE FROM reference_package;
+TRUNCATE reference_package RESTART IDENTITY;
+
+INSERT INTO reference_data_meta (generated_at) VALUES ('2026-10-01T08:30:00.478252137Z')
+    ON CONFLICT (singleton) DO UPDATE SET generated_at = EXCLUDED.generated_at;
 
 INSERT INTO reference_package (ecosystem, package_name, dependent_count, popularity_rank)
 VALUES

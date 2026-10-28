@@ -35,7 +35,7 @@ All BigQuery-touching code lives in a separate Gradle subproject, `refdata-tool/
 
 By default this authenticates via Application Default Credentials — Workload Identity Federation in CI (`.github/workflows/refresh-reference-data.yml` uses `google-github-actions/auth`, no static key ever stored in GitHub Secrets), or a maintainer's own `gcloud auth application-default login` locally. Pass `-PcredentialsPath=/path/to/bigquery-sa.json` instead to authenticate with a downloaded service-account key file.
 
-This overwrites `src/main/resources/db/migration/R__reference_data_seed.sql` in place with a fresh `DELETE FROM reference_package;` followed by batched `INSERT` statements — review the diff like any other code change, merge it, and Flyway re-applies it on the next deploy/restart.
+This overwrites `src/main/resources/db/migration/R__reference_data_seed.sql` in place with a `TRUNCATE reference_package RESTART IDENTITY;`, the seed's generation timestamp written to `reference_data_meta`, and batched `INSERT` statements — review the diff like any other code change, merge it, and Flyway re-applies it on the next deploy/restart.
 
 ### 2. Similarity algorithm
 
@@ -174,14 +174,14 @@ GET    /v1/allowlist?ecosystem=npm                                          -> 2
 
 ### `GET /api/monitoring/health`
 
-Also exposed as standard `HealthIndicator` beans under `GET /actuator/health` (`database`, `referenceDataFreshness` components). `referenceDataFreshness` is `DOWN` if `reference_package` is empty or any ecosystem has fewer rows than `packagenameguardian.reference-data.min-acceptable-count-per-ecosystem`; `DEGRADED` if no Flyway history is found for the seed migration, or it was last applied more than `freshness-max-age-hours` ago; `UP` otherwise.
+Also exposed as standard `HealthIndicator` beans under `GET /actuator/health` (`database`, `referenceDataFreshness` components). `referenceDataFreshness` is `DOWN` if `reference_package` is empty or any ecosystem has fewer rows than `packagenameguardian.reference-data.min-acceptable-count-per-ecosystem`; `DEGRADED` if `reference_data_meta` has no `generated_at` row, or the seed was generated (from BigQuery, not applied by Flyway — a recreated database doesn't make old data look fresh) more than `freshness-max-age-hours` ago; `UP` otherwise.
 
 ```json
 {
   "status": "UP",
   "components": {
     "database": { "status": "UP", "details": { "message": "Database connection OK" } },
-    "referenceDataFreshness": { "status": "UP", "details": { "packageCounts": {"NPM": 10000, "PYPI": 10000, "MAVEN": 10000}, "lastSeedAppliedAt": "...", "hoursSinceLastSeedApplied": 0 } }
+    "referenceDataFreshness": { "status": "UP", "details": { "packageCounts": {"NPM": 10000, "PYPI": 10000, "MAVEN": 10000}, "referenceDataGeneratedAt": "...", "hoursSinceReferenceDataGenerated": 27 } }
   }
 }
 ```
@@ -330,7 +330,7 @@ Commit the regenerated file through a normal reviewed PR (the scheduled `refresh
 | Category | YAML property | Default | Description |
 |---|---|---|---|
 | **Reference data** | `packagenameguardian.reference-data.min-acceptable-count-per-ecosystem` | `5000` | Health-check floor — fewer rows than this for any ecosystem reports `DOWN` |
-| | `packagenameguardian.reference-data.freshness-max-age-hours` | `1512` (63 days) | How stale the seed migration's last apply can get before reporting `DEGRADED` |
+| | `packagenameguardian.reference-data.freshness-max-age-hours` | `1512` (63 days) | How old the seed's data (its `generated_at`) can get before reporting `DEGRADED` |
 | **Security** | `packagenameguardian.security.enabled` | `true` | Require `Authorization: Bearer {api-key}` on `POST /v1/check` |
 | | `packagenameguardian.security.api-key` | _(empty)_ | Key for `POST /v1/check` (held by SilicaProxy). Fails closed if enabled with no key set |
 | | `packagenameguardian.security.admin-api-key` | _(empty)_ | Separate key for `/v1/allowlist` — must **not** be given to the proxy. Fails closed if empty; the check key is not accepted there, nor the admin key on `/v1/check` |
@@ -348,7 +348,7 @@ Pass these as `-e` flags to `docker run`, or use in a `docker-compose.yml` `envi
 | Category | Environment variable | Default | Description |
 |---|---|---|---|
 | **Reference data** | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_MIN_ACCEPTABLE_COUNT_PER_ECOSYSTEM` | `5000` | Health-check floor — fewer rows than this for any ecosystem reports `DOWN` |
-| | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_FRESHNESS_MAX_AGE_HOURS` | `1512` (63 days) | How stale the seed migration's last apply can get before reporting `DEGRADED` |
+| | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_FRESHNESS_MAX_AGE_HOURS` | `1512` (63 days) | How old the seed's data (its `generated_at`) can get before reporting `DEGRADED` |
 | **Security** | `PACKAGENAMEGUARDIAN_SECURITY_ENABLED` | `true` | Require `Authorization: Bearer {api-key}` on `POST /v1/check` |
 | | `PACKAGENAMEGUARDIAN_API_KEY` | _(empty)_ | Key for `POST /v1/check`. Fails closed if enabled with no key set |
 | | `PACKAGENAMEGUARDIAN_ADMIN_API_KEY` | _(empty)_ | Key for `/v1/allowlist`, distinct from the check key. Fails closed if empty |
