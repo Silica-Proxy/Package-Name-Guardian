@@ -21,6 +21,7 @@ import com.silicaproxy.packagenameguardian.model.entity.AllowlistEntry;
 import com.silicaproxy.packagenameguardian.model.entity.ReferencePackage;
 import com.silicaproxy.packagenameguardian.service.similarity.PackageNameNormalizer;
 import com.silicaproxy.packagenameguardian.service.similarity.PackageNamespaceExtractor;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -41,10 +42,14 @@ import org.jspecify.annotations.NullMarked;
  * ~10,000-candidate scan down to a short length-bounded slice in O(log n).
  */
 @NullMarked
-public record ReferenceSnapshot(Map<String, EcosystemSnapshot> byEcosystem) {
+public record ReferenceSnapshot(Map<String, EcosystemSnapshot> byEcosystem, Instant loadedAt) {
 
     public ReferenceSnapshot {
         byEcosystem = Collections.unmodifiableMap(new HashMap<>(byEcosystem));
+    }
+
+    public ReferenceSnapshot(Map<String, EcosystemSnapshot> byEcosystem) {
+        this(byEcosystem, Instant.now());
     }
 
     public EcosystemSnapshot ecosystem(String ecosystem) {

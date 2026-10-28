@@ -28,6 +28,13 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,referenceCache,database
+        liveness:
+          include: livenessState
       status:
         order: down,out-of-service,degraded,up,unknown
   metrics:
