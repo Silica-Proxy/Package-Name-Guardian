@@ -91,6 +91,27 @@ class SimilarityScannerTest {
         assertThat(result.flagged()).isFalse();
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "srequest, requests",
+        "sexpress, express",
+        "aexios, axios",
+        "sexpres, express",
+    })
+    void characterMovedFromEndToFrontIsFlagged(String candidateName, String popularName) {
+        ScanResult result = scanner.scan(candidateName, npmSnapshot(List.of(popularName)));
+
+        assertThat(result.flagged()).isTrue();
+        assertThat(result.flaggedCandidate()).isEqualTo(popularName);
+    }
+
+    @Test
+    void edgeCharacterMoveOnVeryShortNamesIsNotFlagged() {
+        ScanResult result = scanner.scan("tar", npmSnapshot(List.of("art")));
+
+        assertThat(result.flagged()).isFalse();
+    }
+
     @Test
     void reqeustsIsFlaggedAsTyposquatOfRequests() {
         EcosystemSnapshot snapshot = npmSnapshot(List.of("requests"));

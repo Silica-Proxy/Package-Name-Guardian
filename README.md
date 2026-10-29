@@ -41,7 +41,7 @@ This overwrites `src/main/resources/db/migration/R__reference_data_seed.sql` in 
 
 A candidate popular-package name is **flagged** iff:
 - **Levenshtein distance** (length-scaled threshold, `clamp(2, floor(len×0.20), 4)`) crosses its threshold, **AND**
-- **at least one** of Jaro-Winkler (fixed threshold `0.92`) or FuzzyScore (normalized, threshold `0.60`) also crosses its threshold.
+- **at least one** of Jaro-Winkler (fixed threshold `0.92`), FuzzyScore (normalized, threshold `0.60`), or the **edge-move** check (names of 5+ characters where the first or last character was moved to the opposite end, e.g. `srequest`/`requests`) also matches.
 
 #### Levenshtein distance — `clamp(2, floor(len×0.20), 4)`
 
@@ -76,10 +76,13 @@ Real values from `commons-text` 1.14.0 (the exact classes and version this servi
 |---|---|---|---|---|
 | `lodahs` / `lodash` | 2 (≤2) | 0.9667 ✅ | 0.6875 ✅ | ✅ |
 | `reqeusts` / `requests` | 2 (≤2) | 0.9708 ✅ | 0.3636 ❌ | ✅ (via JW) |
+| `srequest` / `requests` | 2 (≤2) | 0.9167 ❌ | 0.0450 ❌ | ✅ (via edge-move) |
 | `spring-context` / `spring-aop` | 6 (>2) ❌ | 0.8743 ❌ | 0.6786 ✅ | ❌ |
 | `commons-text` / `commons-io` | 4 (>2) ❌ | 0.8933 ❌ | 0.7857 ✅ | ❌ |
 
 `reqeusts`/`requests` shows the **OR**: FuzzyScore misses (the transposed `e`/`q` breaks character order), but Jaro-Winkler still crosses `0.92`, so the typosquat is still caught. `spring-context`/`spring-aop` and `commons-text`/`commons-io` show why Levenshtein is **mandatory**: their shared prefix (`spring-`, `commons-`) pushes FuzzyScore *above* its own `0.60` threshold on its own — if the OR ran unguarded, these legitimate sibling packages would be blocked. Their Levenshtein distance (6 and 4) is well past their threshold (2), so `flagged=false` regardless of what the other two legs say. Levenshtein is a whole-name edit-distance measure, not prefix-biased, so requiring it filters out exactly this false-positive shape without weakening detection of real typosquats (which resemble the *entire* name, not just the start).
+
+`srequest`/`requests` shows why the edge-move check exists: moving the trailing `s` to the front removes the shared prefix Jaro-Winkler rewards and breaks FuzzyScore's in-order matching, so both legs miss despite a Levenshtein distance of 2. A symmetric LCS ratio (`7/8 = 0.875`) would catch it too, but measured against the real top-10,000 datasets it flagged ~100 additional legitimately distinct npm names at that threshold (e.g. `babel-code-frame`/`@babel/code-frame`, `inquirer`/`enquirer`); the edge-move check adds about 5 names across all three ecosystems.
 
 The request itself is `BLOCKED` iff **any** candidate in the ecosystem's reference set is flagged and the candidate isn't allowlisted (see [Allowlist](#allowlist) below); a name that resembles nothing popular is simply `ALLOWED`.
 

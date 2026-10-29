@@ -150,6 +150,19 @@ class RealDataSimilarityScannerTest {
         assertThat(result.flagged()).isTrue();
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "NPM, sexpress",
+        "NPM, aexios",
+        "PYPI, srequest",
+    })
+    void characterMovedToTheOppositeEndIsFlaggedAgainstTheRealDataset(String bigQueryEcosystem, String name) {
+        String ecosystem = bigQueryEcosystem.toLowerCase(Locale.ROOT);
+        EcosystemSnapshot snapshot = snapshotExcluding(bigQueryEcosystem, name);
+
+        assertThat(SCANNER.scan(name, snapshot).flagged()).isTrue();
+    }
+
     @Test
     void scanningAgainstTenThousandRealCandidatesStaysFast() {
         EcosystemSnapshot npmSnapshot = ReferenceSnapshot.from(rowsByEcosystem.get("NPM"), List.of(), NORMALIZER, NAMESPACE_EXTRACTOR)
