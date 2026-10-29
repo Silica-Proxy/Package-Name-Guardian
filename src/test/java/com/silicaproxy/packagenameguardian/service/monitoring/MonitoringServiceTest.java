@@ -99,9 +99,9 @@ class MonitoringServiceTest {
     }
 
     @Test
-    void referenceDataFreshnessIsDegradedWhenNoFlywayHistoryRowIsFound() {
+    void referenceDataFreshnessIsDegradedWhenNoGeneratedAtRowIsFound() {
         when(referencePackageRepository.countByEcosystem()).thenReturn(HEALTHY_COUNTS);
-        when(healthCheckRepository.referenceDataSeedLastAppliedAt()).thenReturn(Optional.empty());
+        when(healthCheckRepository.referenceDataGeneratedAt()).thenReturn(Optional.empty());
 
         ComponentHealth health = monitoringService.referenceDataFreshnessHealth();
 
@@ -111,7 +111,7 @@ class MonitoringServiceTest {
     @Test
     void referenceDataFreshnessIsDegradedWhenSeedIsStale() {
         when(referencePackageRepository.countByEcosystem()).thenReturn(HEALTHY_COUNTS);
-        when(healthCheckRepository.referenceDataSeedLastAppliedAt())
+        when(healthCheckRepository.referenceDataGeneratedAt())
                 .thenReturn(Optional.of(Instant.now().minusSeconds(2000 * 3600L)));
 
         ComponentHealth health = monitoringService.referenceDataFreshnessHealth();
@@ -122,7 +122,7 @@ class MonitoringServiceTest {
     @Test
     void referenceDataFreshnessIsUpWhenCountsAreHealthyAndSeedIsRecent() {
         when(referencePackageRepository.countByEcosystem()).thenReturn(HEALTHY_COUNTS);
-        when(healthCheckRepository.referenceDataSeedLastAppliedAt())
+        when(healthCheckRepository.referenceDataGeneratedAt())
                 .thenReturn(Optional.of(Instant.now().minusSeconds(3600)));
 
         ComponentHealth health = monitoringService.referenceDataFreshnessHealth();

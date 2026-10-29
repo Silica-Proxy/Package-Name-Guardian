@@ -28,13 +28,11 @@ import org.springframework.stereotype.Repository;
 
 /**
  * Cross-cutting DB introspection backing {@code MonitoringService}'s health checks: plain
- * connectivity, plus when the reference-data seed migration was last actually applied.
+ * connectivity, plus when the reference-data seed currently loaded was generated.
  */
 @Repository
 @NullMarked
 public class HealthCheckRepository {
-
-    private static final String SEED_MIGRATION_SCRIPT = "R__reference_data_seed.sql";
 
     private final JdbcClient jdbcClient;
 
@@ -47,25 +45,18 @@ public class HealthCheckRepository {
         jdbcClient.sql("SELECT 1").query().singleRow();
     }
 
-    // Assumes the default flyway_schema_history table name (application.yaml never sets
-    // spring.flyway.table) -- update this query if that ever changes. installed_on is only
-    // updated for a repeatable migration (R__...) when its checksum actually changes and Flyway
-    // re-applies it, which is exactly the "when was reference data last (re)loaded into this
-    // database" signal freshness monitoring needs -- not "when did the app last start".
-    public Optional<Instant> referenceDataSeedLastAppliedAt() {
-        List<Map<String, Object>> rows = jdbcClient.sql("""
-                SELECT installed_on FROM flyway_schema_history
-                WHERE script = :script AND success = true
-                ORDER BY installed_rank DESC
-                LIMIT 1
-                """)
-                .param("script", SEED_MIGRATION_SCRIPT)
+    // Reads the generation timestamp the seed migration itself writes, rather than
+    // flyway_schema_history.installed_on: installed_on is "now" whenever the seed is applied to a
+    // freshly created database, so months-old data would look fresh. generated_at is the age of
+    // the data itself, which is what freshness monitoring needs.
+    public Optional<Instant> referenceDataGeneratedAt() {
+        List<Map<String, Object>> rows = jdbcClient.sql("SELECT generated_at FROM reference_data_meta")
                 .query()
                 .listOfRows();
         if (rows.isEmpty()) {
             return Optional.empty();
         }
-        Object value = rows.get(0).get("installed_on");
+        Object value = rows.get(0).get("generated_at");
         return value == null ? Optional.empty() : Optional.of(((Timestamp) value).toInstant());
     }
 }

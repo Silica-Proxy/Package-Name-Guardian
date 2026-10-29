@@ -106,10 +106,18 @@ public final class ReferenceDataSqlGenerator {
         sql.append("-- Regenerated via ./gradlew :refdata-tool:generateReferenceDataSql from a live\n");
         sql.append("-- BigQuery query against bigquery-public-data.deps_dev_v1. Flyway re-applies this\n");
         sql.append("-- file automatically whenever its checksum changes -- no version bump needed.\n");
-        sql.append("-- Generated at: ").append(DateTimeFormatter.ISO_INSTANT.format(generatedAt)).append('\n');
+        String generatedAtIso = DateTimeFormatter.ISO_INSTANT.format(generatedAt);
+        sql.append("-- Generated at: ").append(generatedAtIso).append('\n');
         sql.append("-- Row counts: ").append(formatEcosystemCounts(rows)).append('\n');
         sql.append('\n');
-        sql.append("DELETE FROM reference_package;\n");
+        // TRUNCATE rather than DELETE: no dead tuples left behind on every refresh, and RESTART
+        // IDENTITY keeps the BIGSERIAL id from growing by the table size each month.
+        sql.append("TRUNCATE reference_package RESTART IDENTITY;\n");
+        sql.append('\n');
+        // Read by the freshness health check: the age of the data itself, independent of when
+        // Flyway happened to apply this file (e.g. to a freshly recreated database).
+        sql.append("INSERT INTO reference_data_meta (generated_at) VALUES ('").append(generatedAtIso).append("')\n");
+        sql.append("    ON CONFLICT (singleton) DO UPDATE SET generated_at = EXCLUDED.generated_at;\n");
         sql.append('\n');
 
         for (int start = 0; start < rows.size(); start += MAX_BATCH_SIZE) {

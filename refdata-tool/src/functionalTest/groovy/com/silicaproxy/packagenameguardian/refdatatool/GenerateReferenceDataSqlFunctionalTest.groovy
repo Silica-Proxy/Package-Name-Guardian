@@ -91,9 +91,12 @@ class GenerateReferenceDataSqlFunctionalTest extends Specification {
         result.task(":refdata-tool:generateReferenceDataSql").outcome == TaskOutcome.SUCCESS
         outputFile.exists()
 
-        and: "the SQL deletes the previous seed before inserting the new one"
+        and: "the SQL truncates the previous seed before inserting the new one"
         String sql = outputFile.text
-        sql.indexOf("DELETE FROM reference_package;") < sql.indexOf("INSERT INTO reference_package")
+        sql.indexOf("TRUNCATE reference_package RESTART IDENTITY;") < sql.indexOf("INSERT INTO reference_package")
+
+        and: "the SQL records when the seed was generated"
+        sql.contains("INSERT INTO reference_data_meta (generated_at) VALUES ('")
 
         and: "both seeded npm packages are present, correctly ranked by dependent count"
         sql.contains("('NPM', 'popular', 2, 1)")
