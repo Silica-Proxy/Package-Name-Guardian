@@ -41,7 +41,7 @@ configurations {
 dependencies {
 	// BigQuery client -- the whole reason this is a separate subproject: these dependencies must
 	// never end up on the main packagenameguardian app's runtime classpath / bootJar.
-	implementation platform('com.google.cloud:libraries-bom:26.88.1')
+	implementation platform('com.google.cloud:libraries-bom:26.91.0')
 	// libraries-bom pulls Jackson 2.18.3 (vulnerable) -- stay on the 2.18 line, patched release
 	implementation platform('com.fasterxml.jackson:jackson-bom:2.18.12')
 	implementation 'com.google.cloud:google-cloud-bigquery'
