@@ -37,6 +37,13 @@ jobs:
       - name: Generate reference data SQL
         run: ./gradlew :refdata-tool:generateReferenceDataSql
 
+      # Keeps the generated file downloadable from the run page even if the PR step fails.
+      - name: Upload generated SQL
+        uses: actions/upload-artifact@v7
+        with:
+          name: reference-data-seed
+          path: src/main/resources/db/migration/R__reference_data_seed.sql
+
       - name: Check for changes
         id: check-changes
         run: |
