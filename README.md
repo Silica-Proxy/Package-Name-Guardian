@@ -252,7 +252,7 @@ docker run -d \
 docker build -t packagenameguardian .
 ```
 
-The included multi-stage `Dockerfile` builds `bootJar` with the Gradle wrapper, then `jlink`s a minimal JRE (only the modules `jdeps` finds actually in use, plus `jdk.crypto.ec`) into a non-root `alpine` runtime image. All configuration is passed as environment variables:
+The included multi-stage `Dockerfile` builds `bootJar` with the Gradle wrapper, extracts it into Spring Boot layers, `jlink`s a minimal JRE (only the modules `jdeps` finds actually in use, plus `jdk.crypto.ec`) on BellSoft Liberica musl, and assembles a non-root `alpaquita-linux-base` (musl) runtime image. All configuration is passed as environment variables:
 
 ```bash
 docker run -d \

@@ -131,3 +131,8 @@ tasks.named('dependencyUpdates') {
 		!isStableVersion(it.candidate.version) && isStableVersion(it.currentVersion)
 	}
 }
+
+// bootRun runs from class directories (no jar manifest), so hand the version to the banner explicitly.
+tasks.named('bootRun') {
+	systemProperty 'application.formatted-version', " (v${project.version})"
+}
