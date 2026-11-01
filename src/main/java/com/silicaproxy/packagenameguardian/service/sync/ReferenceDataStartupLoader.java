@@ -88,7 +88,7 @@ public class ReferenceDataStartupLoader implements ApplicationRunner {
         }
 
         cache.swap(snapshotFactory.build(rows, allowlistRows));
-        LOG.info("Loaded {} reference packages and {} allowlist entries into the in-memory cache.",
+        LOG.debug("Loaded {} reference packages and {} allowlist entries into the in-memory cache.",
                 rows.size(), allowlistRows.size());
     }
 }
