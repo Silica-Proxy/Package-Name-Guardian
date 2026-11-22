@@ -28,6 +28,13 @@ management:
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,referenceCache,database
+        liveness:
+          include: livenessState
       status:
         order: down,out-of-service,degraded,up,unknown
   metrics:
@@ -53,6 +60,8 @@ packagenameguardian:
     # api-key configured) in any deployment reachable outside a trusted network.
     enabled: "${PACKAGENAMEGUARDIAN_SECURITY_ENABLED:true}"
     api-key: "${PACKAGENAMEGUARDIAN_API_KEY:}"
+    # Separate key for /v1/allowlist (never given to the proxy). Blank = allowlist API refuses all.
+    admin-api-key: "${PACKAGENAMEGUARDIAN_ADMIN_API_KEY:}"
 
   similarity:
     # A candidate whose npm @scope already has at least one popular package in the reference set
@@ -61,6 +70,11 @@ packagenameguardian:
     # Same idea for Maven's groupId -- Maven Central enforces groupId ownership. PyPI has no
     # namespace concept, so there's no equivalent property for it.
     maven-same-group-id-exemption-enabled: true
+
+  allowlist:
+    # How often package_allowlist (managed via POST/DELETE /v1/allowlist) is reloaded into the
+    # in-memory snapshot, so an entry added through the admin API takes effect without a restart.
+    refresh-interval-ms: 60000
 
 server:
   port: 8100

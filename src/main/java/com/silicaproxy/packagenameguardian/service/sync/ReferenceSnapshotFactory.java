@@ -17,6 +17,7 @@
 
 package com.silicaproxy.packagenameguardian.service.sync;
 
+import com.silicaproxy.packagenameguardian.model.entity.AllowlistEntry;
 import com.silicaproxy.packagenameguardian.model.entity.ReferencePackage;
 import com.silicaproxy.packagenameguardian.service.similarity.PackageNameNormalizer;
 import com.silicaproxy.packagenameguardian.service.similarity.PackageNamespaceExtractor;
@@ -41,7 +42,7 @@ public class ReferenceSnapshotFactory {
         this.namespaceExtractor = namespaceExtractor;
     }
 
-    public ReferenceSnapshot build(List<ReferencePackage> rows) {
-        return ReferenceSnapshot.from(rows, normalizer, namespaceExtractor);
+    public ReferenceSnapshot build(List<ReferencePackage> rows, List<AllowlistEntry> allowlistRows) {
+        return ReferenceSnapshot.from(rows, allowlistRows, normalizer, namespaceExtractor);
     }
 }

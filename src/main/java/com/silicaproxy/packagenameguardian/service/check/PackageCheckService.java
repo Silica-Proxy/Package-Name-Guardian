@@ -17,6 +17,7 @@
 
 package com.silicaproxy.packagenameguardian.service.check;
 
+import com.silicaproxy.packagenameguardian.config.LogSanitizer;
 import com.silicaproxy.packagenameguardian.config.Metrics;
 import com.silicaproxy.packagenameguardian.model.dto.CheckRequest;
 import com.silicaproxy.packagenameguardian.model.dto.CheckResponse;
@@ -30,16 +31,20 @@ import com.silicaproxy.packagenameguardian.service.sync.ReferenceDataCache;
 import com.silicaproxy.packagenameguardian.service.sync.ReferenceSnapshot;
 import com.silicaproxy.packagenameguardian.service.sync.ReferenceSnapshot.EcosystemSnapshot;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.NullMarked;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Backs {@code POST /v1/check}. {@code BLOCKED}/"reference data not yet available" is returned
- * only before the very first sync ever completes (cache still empty) -- never on a routine daily
- * re-sync, even if that sync fails, since the previous generation keeps serving.
+ * Backs {@code POST /v1/check}. A {@code 503 Service Unavailable} "reference data not yet
+ * available" is raised only before the very first sync ever completes (cache still empty) -- never
+ * on a routine daily re-sync, even if that sync fails, since the previous generation keeps serving.
+ * It is deliberately not a {@code BLOCKED} verdict: callers persist {@code BLOCKED} as a permanent
+ * verdict, whereas a 503 is treated as a transport error (fail-open/closed per caller config) and
+ * never stored.
  */
 @Service
 @NullMarked
@@ -47,8 +52,6 @@ public class PackageCheckService {
 
     private static final Logger LOG = LoggerFactory.getLogger(PackageCheckService.class);
     private static final String COLD_START_REASON = "Reference data not yet available";
-    // Control characters (CR, LF, other) are replaced with underscore in logs to prevent log forging.
-    private static final Pattern CONTROL_CHARS = Pattern.compile("\\p{Cntrl}");
 
     private final ReferenceDataCache cache;
     private final PackageNameNormalizer normalizer;
@@ -76,8 +79,9 @@ public class PackageCheckService {
     public CheckResponse check(CheckRequest request) {
         ReferenceSnapshot snapshot = cache.current();
         if (snapshot == null) {
-            recordVerdict(request.ecosystem(), Metrics.VERDICT_BLOCKED);
-            return CheckResponse.blocked(COLD_START_REASON);
+            meterRegistry.counter(Metrics.CHECK_UNAVAILABLE_METRIC, Metrics.TAG_ECOSYSTEM, request.ecosystem())
+                    .increment();
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, COLD_START_REASON);
         }
 
         String ecosystem = request.ecosystem();
@@ -97,6 +101,15 @@ public class PackageCheckService {
         }
 
         String normalizedName = normalizer.normalize(request.packageName(), ecosystem);
+
+        // Operator-confirmed real packages that would otherwise collide with a popular package
+        // under the similarity scan (see package_allowlist / AllowlistController) are allowed
+        // without ever running the scanner.
+        if (ecosystemData.allowlistedNames().contains(normalizedName)) {
+            recordVerdict(ecosystem, Metrics.VERDICT_ALLOWED_VIA_ALLOWLIST);
+            return CheckResponse.allowed();
+        }
+
         ScanResult result = scanner.scan(normalizedName, ecosystemData);
 
         if (!result.flagged()) {
@@ -110,7 +123,7 @@ public class PackageCheckService {
         if (LOG.isDebugEnabled() && scores != null) {
             LOG.debug(
                     "Flagged {}/{}: levenshtein={} jaroWinkler={} fuzzyScore={} candidate={}",
-                    ecosystem, sanitizeForLog(request.packageName()), scores.levenshteinDistance(),
+                    ecosystem, LogSanitizer.sanitize(request.packageName()), scores.levenshteinDistance(),
                     scores.jaroWinklerSimilarity(), scores.fuzzyScoreNormalized(),
                     result.flaggedCandidate());
         }
@@ -125,10 +138,6 @@ public class PackageCheckService {
             case "maven" -> properties.similarity().mavenSameGroupIdExemptionEnabled();
             default -> false;
         };
-    }
-
-    private static String sanitizeForLog(String value) {
-        return CONTROL_CHARS.matcher(value).replaceAll("_");
     }
 
     private void recordVerdict(String ecosystem, String verdict) {

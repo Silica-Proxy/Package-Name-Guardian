@@ -44,12 +44,13 @@ public class ApiKeyInterceptor implements HandlerInterceptor {
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return true;
         }
-        if (handlerMethod.getMethodAnnotation(RequiresApiKey.class) == null) {
+        RequiresApiKey requiresApiKey = handlerMethod.getMethodAnnotation(RequiresApiKey.class);
+        if (requiresApiKey == null) {
             return true;
         }
 
         String providedKey = extractBearerToken(request.getHeader(HttpHeaders.AUTHORIZATION));
-        if (apiKeyValidator.isAuthorized(providedKey)) {
+        if (apiKeyValidator.isAuthorized(requiresApiKey.value(), providedKey)) {
             return true;
         }
         response.setStatus(HttpStatus.UNAUTHORIZED.value());

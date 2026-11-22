@@ -27,6 +27,7 @@ packagenameguardian:
   security:
     enabled: false
     api-key: "test-api-key"
+    admin-api-key: "test-admin-api-key"
 
 server:
   port: 0

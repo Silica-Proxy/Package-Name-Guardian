@@ -41,7 +41,7 @@ class SimilarityScannerTest {
         List<ReferencePackage> rows = names.stream()
                 .map(name -> new ReferencePackage("NPM", name, 1000, 1))
                 .toList();
-        return ReferenceSnapshot.from(rows, normalizer, namespaceExtractor).ecosystem("npm");
+        return ReferenceSnapshot.from(rows, List.of(), normalizer, namespaceExtractor).ecosystem("npm");
     }
 
     @Test
@@ -87,6 +87,27 @@ class SimilarityScannerTest {
         EcosystemSnapshot snapshot = npmSnapshot(List.of("lodash-plus-a-very-long-unrelated-suffix-name"));
 
         ScanResult result = scanner.scan("lodash", snapshot);
+
+        assertThat(result.flagged()).isFalse();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "srequest, requests",
+        "sexpress, express",
+        "aexios, axios",
+        "sexpres, express",
+    })
+    void characterMovedFromEndToFrontIsFlagged(String candidateName, String popularName) {
+        ScanResult result = scanner.scan(candidateName, npmSnapshot(List.of(popularName)));
+
+        assertThat(result.flagged()).isTrue();
+        assertThat(result.flaggedCandidate()).isEqualTo(popularName);
+    }
+
+    @Test
+    void edgeCharacterMoveOnVeryShortNamesIsNotFlagged() {
+        ScanResult result = scanner.scan("tar", npmSnapshot(List.of("art")));
 
         assertThat(result.flagged()).isFalse();
     }

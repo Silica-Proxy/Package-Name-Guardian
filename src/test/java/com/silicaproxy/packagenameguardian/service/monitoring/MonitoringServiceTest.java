@@ -23,6 +23,7 @@ import static org.mockito.Mockito.when;
 import com.silicaproxy.packagenameguardian.dao.repository.HealthCheckRepository;
 import com.silicaproxy.packagenameguardian.dao.repository.ReferencePackageRepository;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties;
+import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.AllowlistProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.ReferenceDataProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.SecurityProperties;
 import com.silicaproxy.packagenameguardian.properties.PackageNameGuardianProperties.SimilarityProperties;
@@ -42,8 +43,9 @@ class MonitoringServiceTest {
 
     private static final PackageNameGuardianProperties PROPERTIES = new PackageNameGuardianProperties(
             new ReferenceDataProperties(5000, 1512L),
-            new SecurityProperties(true, "test-api-key"),
-            new SimilarityProperties(true, true));
+            new SecurityProperties(true, "test-api-key", "test-admin-api-key"),
+            new SimilarityProperties(true, true),
+            new AllowlistProperties(60000L));
 
     private static final Map<String, Long> HEALTHY_COUNTS = Map.of("NPM", 10000L, "PYPI", 10000L, "MAVEN", 10000L);
 
@@ -97,9 +99,9 @@ class MonitoringServiceTest {
     }
 
     @Test
-    void referenceDataFreshnessIsDegradedWhenNoFlywayHistoryRowIsFound() {
+    void referenceDataFreshnessIsDegradedWhenNoGeneratedAtRowIsFound() {
         when(referencePackageRepository.countByEcosystem()).thenReturn(HEALTHY_COUNTS);
-        when(healthCheckRepository.referenceDataSeedLastAppliedAt()).thenReturn(Optional.empty());
+        when(healthCheckRepository.referenceDataGeneratedAt()).thenReturn(Optional.empty());
 
         ComponentHealth health = monitoringService.referenceDataFreshnessHealth();
 
@@ -109,7 +111,7 @@ class MonitoringServiceTest {
     @Test
     void referenceDataFreshnessIsDegradedWhenSeedIsStale() {
         when(referencePackageRepository.countByEcosystem()).thenReturn(HEALTHY_COUNTS);
-        when(healthCheckRepository.referenceDataSeedLastAppliedAt())
+        when(healthCheckRepository.referenceDataGeneratedAt())
                 .thenReturn(Optional.of(Instant.now().minusSeconds(2000 * 3600L)));
 
         ComponentHealth health = monitoringService.referenceDataFreshnessHealth();
@@ -120,7 +122,7 @@ class MonitoringServiceTest {
     @Test
     void referenceDataFreshnessIsUpWhenCountsAreHealthyAndSeedIsRecent() {
         when(referencePackageRepository.countByEcosystem()).thenReturn(HEALTHY_COUNTS);
-        when(healthCheckRepository.referenceDataSeedLastAppliedAt())
+        when(healthCheckRepository.referenceDataGeneratedAt())
                 .thenReturn(Optional.of(Instant.now().minusSeconds(3600)));
 
         ComponentHealth health = monitoringService.referenceDataFreshnessHealth();

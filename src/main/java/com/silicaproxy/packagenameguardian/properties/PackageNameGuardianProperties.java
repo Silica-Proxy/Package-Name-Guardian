@@ -27,7 +27,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record PackageNameGuardianProperties(
     ReferenceDataProperties referenceData,
     SecurityProperties security,
-    SimilarityProperties similarity
+    SimilarityProperties similarity,
+    AllowlistProperties allowlist
 ) {
 
     public record ReferenceDataProperties(
@@ -44,7 +45,11 @@ public record PackageNameGuardianProperties(
         // Proxy sends this as a decision oracle over the network, so this must stay true
         // (with a real apiKey configured) in any deployment reachable outside a trusted network.
         @DefaultValue("true") boolean enabled,
-        @Nullable String apiKey
+        // Key for POST /v1/check, held by SilicaProxy.
+        @Nullable String apiKey,
+        // Separate key for /v1/allowlist, never shared with the proxy: a compromised proxy must not
+        // be able to allowlist a typosquat. Blank fails closed (allowlist API unusable).
+        @Nullable String adminApiKey
     ) {}
 
     public record SimilarityProperties(
@@ -56,5 +61,12 @@ public record PackageNameGuardianProperties(
         // groupId ownership, so a candidate sharing a groupId with an already-popular package
         // can't be a typosquatter impersonating that groupId.
         @DefaultValue("true") boolean mavenSameGroupIdExemptionEnabled
+    ) {}
+
+    public record AllowlistProperties(
+        // How often ReferenceDataStartupLoader.reload() re-reads reference_package and
+        // package_allowlist into the in-memory snapshot, so an allowlist entry added through the
+        // admin API takes effect without an app restart.
+        @DefaultValue("60000") long refreshIntervalMs
     ) {}
 }

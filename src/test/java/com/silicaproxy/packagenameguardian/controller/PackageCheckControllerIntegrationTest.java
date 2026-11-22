@@ -26,6 +26,7 @@ import com.silicaproxy.packagenameguardian.model.dto.CheckResponse;
 import com.silicaproxy.packagenameguardian.model.dto.Verdict;
 import com.silicaproxy.packagenameguardian.model.entity.ReferencePackage;
 import com.silicaproxy.packagenameguardian.service.sync.ReferenceDataCache;
+import com.silicaproxy.packagenameguardian.service.sync.ReferenceSnapshot;
 import com.silicaproxy.packagenameguardian.service.sync.ReferenceSnapshotFactory;
 import java.io.IOException;
 import java.net.URI;
@@ -33,11 +34,13 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class PackageCheckControllerIntegrationTest extends BaseIntegrationTest {
 
@@ -67,7 +70,7 @@ class PackageCheckControllerIntegrationTest extends BaseIntegrationTest {
                 new ReferencePackage("NPM", "express", 900, 2),
                 new ReferencePackage("PYPI", "requests", 800, 1),
                 new ReferencePackage("MAVEN", "org.apache.commons:commons-text", 600, 1));
-        cache.swap(snapshotFactory.build(rows));
+        cache.swap(snapshotFactory.build(rows, List.of()));
     }
 
     private CheckResponse check(CheckRequest request) throws IOException, InterruptedException {
@@ -79,6 +82,45 @@ class PackageCheckControllerIntegrationTest extends BaseIntegrationTest {
         HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         return objectMapper.readValue(response.body(), CheckResponse.class);
+    }
+
+    private int checkStatus(String body) throws IOException, InterruptedException {
+        HttpRequest httpRequest = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/v1/check"))
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+        return httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString()).statusCode();
+    }
+
+    @Test
+    void returns503AndNoBlockedVerdictWhileCacheIsEmpty() throws IOException, InterruptedException {
+        ReflectionTestUtils.setField(cache, "current", new AtomicReference<ReferenceSnapshot>());
+
+        assertThat(checkStatus("{\"packageName\":\"lodahs\",\"version\":\"1.0.0\",\"ecosystem\":\"npm\"}"))
+                .isEqualTo(503);
+    }
+
+    @Test
+    void rejectsAPackageNameContainingAControlCharacter() throws IOException, InterruptedException {
+        assertThat(checkStatus("{\"packageName\":\"lod\\nash\",\"version\":\"1.0.0\",\"ecosystem\":\"npm\"}")).isEqualTo(400);
+    }
+
+    @Test
+    void rejectsAPackageNameContainingWhitespace() throws IOException, InterruptedException {
+        assertThat(checkStatus("{\"packageName\":\"lod ash\",\"version\":\"1.0.0\",\"ecosystem\":\"npm\"}")).isEqualTo(400);
+    }
+
+    @Test
+    void rejectsAnOversizedVersion() throws IOException, InterruptedException {
+        String body = "{\"packageName\":\"lodash\",\"version\":\"" + "1".repeat(10_000) + "\",\"ecosystem\":\"npm\"}";
+
+        assertThat(checkStatus(body)).isEqualTo(400);
+    }
+
+    @Test
+    void rejectsAVersionContainingAControlCharacter() throws IOException, InterruptedException {
+        assertThat(checkStatus("{\"packageName\":\"lodash\",\"version\":\"1.0\\r\\n0\",\"ecosystem\":\"npm\"}")).isEqualTo(400);
     }
 
     @Test

@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
  * Holds the currently-served {@link ReferenceSnapshot} behind an {@link AtomicReference}: reads
  * (every {@code POST /v1/check}) never lock, and a generation swap is a single atomic reference
  * write. {@code null} exactly when no generation has ever synced successfully (fresh deployment,
- * before the first sync completes).
+ * before the first sync completes); {@code POST /v1/check} answers 503 in that state.
  */
 @Component
 @NullMarked

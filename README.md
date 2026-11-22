@@ -35,13 +35,13 @@ All BigQuery-touching code lives in a separate Gradle subproject, `refdata-tool/
 
 By default this authenticates via Application Default Credentials — Workload Identity Federation in CI (`.github/workflows/refresh-reference-data.yml` uses `google-github-actions/auth`, no static key ever stored in GitHub Secrets), or a maintainer's own `gcloud auth application-default login` locally. Pass `-PcredentialsPath=/path/to/bigquery-sa.json` instead to authenticate with a downloaded service-account key file.
 
-This overwrites `src/main/resources/db/migration/R__reference_data_seed.sql` in place with a fresh `DELETE FROM reference_package;` followed by batched `INSERT` statements — review the diff like any other code change, merge it, and Flyway re-applies it on the next deploy/restart.
+This overwrites `src/main/resources/db/migration/R__reference_data_seed.sql` in place with a `TRUNCATE reference_package RESTART IDENTITY;`, the seed's generation timestamp written to `reference_data_meta`, and batched `INSERT` statements — review the diff like any other code change, merge it, and Flyway re-applies it on the next deploy/restart.
 
 ### 2. Similarity algorithm
 
 A candidate popular-package name is **flagged** iff:
 - **Levenshtein distance** (length-scaled threshold, `clamp(2, floor(len×0.20), 4)`) crosses its threshold, **AND**
-- **at least one** of Jaro-Winkler (fixed threshold `0.92`) or FuzzyScore (normalized, threshold `0.60`) also crosses its threshold.
+- **at least one** of Jaro-Winkler (fixed threshold `0.92`), FuzzyScore (normalized, threshold `0.60`), or the **edge-move** check (names of 5+ characters where the first or last character was moved to the opposite end, e.g. `srequest`/`requests`) also matches.
 
 #### Levenshtein distance — `clamp(2, floor(len×0.20), 4)`
 
@@ -76,12 +76,15 @@ Real values from `commons-text` 1.14.0 (the exact classes and version this servi
 |---|---|---|---|---|
 | `lodahs` / `lodash` | 2 (≤2) | 0.9667 ✅ | 0.6875 ✅ | ✅ |
 | `reqeusts` / `requests` | 2 (≤2) | 0.9708 ✅ | 0.3636 ❌ | ✅ (via JW) |
+| `srequest` / `requests` | 2 (≤2) | 0.9167 ❌ | 0.0450 ❌ | ✅ (via edge-move) |
 | `spring-context` / `spring-aop` | 6 (>2) ❌ | 0.8743 ❌ | 0.6786 ✅ | ❌ |
 | `commons-text` / `commons-io` | 4 (>2) ❌ | 0.8933 ❌ | 0.7857 ✅ | ❌ |
 
 `reqeusts`/`requests` shows the **OR**: FuzzyScore misses (the transposed `e`/`q` breaks character order), but Jaro-Winkler still crosses `0.92`, so the typosquat is still caught. `spring-context`/`spring-aop` and `commons-text`/`commons-io` show why Levenshtein is **mandatory**: their shared prefix (`spring-`, `commons-`) pushes FuzzyScore *above* its own `0.60` threshold on its own — if the OR ran unguarded, these legitimate sibling packages would be blocked. Their Levenshtein distance (6 and 4) is well past their threshold (2), so `flagged=false` regardless of what the other two legs say. Levenshtein is a whole-name edit-distance measure, not prefix-biased, so requiring it filters out exactly this false-positive shape without weakening detection of real typosquats (which resemble the *entire* name, not just the start).
 
-The request itself is `BLOCKED` iff **any** candidate in the ecosystem's reference set is flagged; there's no allowlist semantics — a name that resembles nothing popular is simply `ALLOWED`.
+`srequest`/`requests` shows why the edge-move check exists: moving the trailing `s` to the front removes the shared prefix Jaro-Winkler rewards and breaks FuzzyScore's in-order matching, so both legs miss despite a Levenshtein distance of 2. A symmetric LCS ratio (`7/8 = 0.875`) would catch it too, but measured against the real top-10,000 datasets it flagged ~100 additional legitimately distinct npm names at that threshold (e.g. `babel-code-frame`/`@babel/code-frame`, `inquirer`/`enquirer`); the edge-move check adds about 5 names across all three ecosystems.
+
+The request itself is `BLOCKED` iff **any** candidate in the ecosystem's reference set is flagged and the candidate isn't allowlisted (see [Allowlist](#allowlist) below); a name that resembles nothing popular is simply `ALLOWED`.
 
 Candidates are pre-filtered by length before running any algorithm (Levenshtein distance is always ≥ `|len(a) − len(b)|`, so this is a safe prune, not an approximation), keeping a scan against 10,000 real candidates in the low milliseconds.
 
@@ -96,7 +99,21 @@ PyPI has no namespace concept and has no equivalent setting.
 
 ### Known limitation
 
-Some real, legitimately different packages are as edit-distance-close to each other as a genuine typosquat, with no namespace signal to fall back on (`react-dom`/`react-dnd`, `eslint-plugin-import`/`eslint-plugin-import-x`, `djangorestframework`/`django-rest-framework` — each differs by only 1–2 characters). No threshold can separate these from a real attack without also missing real typosquats at the same distance. This is validated against the real bundled dataset in `RealDataSimilarityScannerTest` and documented there rather than silently tuned away.
+Some real, legitimately different packages are as edit-distance-close to each other as a genuine typosquat, with no namespace signal to fall back on (`react-dom`/`react-dnd`, `eslint-plugin-import`/`eslint-plugin-import-x`, `djangorestframework`/`django-rest-framework` — each differs by only 1–2 characters). No threshold can separate these from a real attack without also missing real typosquats at the same distance. This is validated against the real bundled dataset in `RealDataSimilarityScannerTest` and documented there rather than silently tuned away. See [Allowlist](#allowlist) for how to unblock a specific case like this.
+
+### 4. Allowlist
+
+A candidate name can be individually allowlisted per ecosystem, for exactly the false-positive shape described above: a real, known package that happens to be edit-distance-close to a popular one with no namespace signal to exempt it automatically. Allowlisted names are checked (after normalization, same as everywhere else) **before** the similarity scan runs, so a match there short-circuits straight to `ALLOWED` without ever scoring against the reference set.
+
+Entries live in the `package_allowlist` table (schema in `V2__allowlist_schema.sql`, unlike `reference_package` this one *is* written at runtime) and are managed via a small admin API, protected by a **separate admin key** (`PACKAGENAMEGUARDIAN_ADMIN_API_KEY`, sent as `Authorization: Bearer {admin-key}`). The `/v1/check` key is rejected here (401) and the admin key is rejected on `/v1/check`, so a compromised proxy cannot allowlist a typosquat. Every add/remove is recorded (`created_by`, `reason`) and logged at INFO as `allowlist.add` / `allowlist.remove`:
+
+```
+POST   /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm", "reason": "real package, reviewed", "createdBy": "alice" }   -> 200 + the created entry (with reason/createdBy), 409 if already allowlisted
+DELETE /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm", "reason": "real package, reviewed", "createdBy": "alice" }   -> 200, 404 if not found
+GET    /v1/allowlist?ecosystem=npm                                          -> 200 + every allowlisted entry for that ecosystem
+```
+
+Allowlist writes go straight to the database, but the in-memory snapshot `PackageCheckService` actually reads from is only reloaded periodically (`packagenameguardian.allowlist.refresh-interval-ms`, default 60000ms) — same mechanism, extended, as the one-time startup load of `reference_package`. A newly-added entry therefore takes up to that interval to become effective; no restart is needed, but it isn't instantaneous either. A reload that fails (e.g. a transient DB outage) logs and keeps serving the previous snapshot rather than clearing the cache.
 
 ---
 
@@ -113,7 +130,7 @@ com.silicaproxy.packagenameguardian          (main app -- no BigQuery dependency
 │   ├── sync/                ReferenceDataCache, ReferenceSnapshot, startup loader
 │   └── monitoring/          Health checks
 ├── dao/
-│   └── repository/           SQL — reference_package, health/Flyway-history introspection
+│   └── repository/           SQL — reference_package (read-only), package_allowlist (read-write), health/Flyway-history introspection
 ├── config/                 Metrics, health indicators
 ├── model/
 │   ├── dto/                  Check request/response
@@ -148,16 +165,26 @@ Response: { "verdict": "ALLOWED" | "BLOCKED", "reason": "<string, present if BLO
 - `version` is accepted but ignored — this service does name-similarity checks only.
 - Protected by `Authorization: Bearer {key}` when `packagenameguardian.security.enabled=true` (the default) — see [Configuration](#configuration).
 
+### `POST` / `DELETE` / `GET /v1/allowlist`
+
+Admin API for `package_allowlist` — see [Allowlist](#4-allowlist). Protected by the separate admin key (`PACKAGENAMEGUARDIAN_ADMIN_API_KEY`); the `/v1/check` key is rejected with 401.
+
+```
+POST   /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm", "reason": "real package, reviewed", "createdBy": "alice" }   -> 200 + created entry (with reason/createdBy), 409 if already allowlisted
+DELETE /v1/allowlist    { "packageName": "react-dnd", "ecosystem": "npm", "reason": "real package, reviewed", "createdBy": "alice" }   -> 200, 404 if not found
+GET    /v1/allowlist?ecosystem=npm                                          -> 200 + every allowlisted entry for that ecosystem
+```
+
 ### `GET /api/monitoring/health`
 
-Also exposed as standard `HealthIndicator` beans under `GET /actuator/health` (`database`, `referenceDataFreshness` components). `referenceDataFreshness` is `DOWN` if `reference_package` is empty or any ecosystem has fewer rows than `packagenameguardian.reference-data.min-acceptable-count-per-ecosystem`; `DEGRADED` if no Flyway history is found for the seed migration, or it was last applied more than `freshness-max-age-hours` ago; `UP` otherwise.
+Also exposed as standard `HealthIndicator` beans under `GET /actuator/health` (`database`, `referenceDataFreshness` components). `referenceDataFreshness` is `DOWN` if `reference_package` is empty or any ecosystem has fewer rows than `packagenameguardian.reference-data.min-acceptable-count-per-ecosystem`; `DEGRADED` if `reference_data_meta` has no `generated_at` row, or the seed was generated (from BigQuery, not applied by Flyway — a recreated database doesn't make old data look fresh) more than `freshness-max-age-hours` ago; `UP` otherwise.
 
 ```json
 {
   "status": "UP",
   "components": {
     "database": { "status": "UP", "details": { "message": "Database connection OK" } },
-    "referenceDataFreshness": { "status": "UP", "details": { "packageCounts": {"NPM": 10000, "PYPI": 10000, "MAVEN": 10000}, "lastSeedAppliedAt": "...", "hoursSinceLastSeedApplied": 0 } }
+    "referenceDataFreshness": { "status": "UP", "details": { "packageCounts": {"NPM": 10000, "PYPI": 10000, "MAVEN": 10000}, "referenceDataGeneratedAt": "...", "hoursSinceReferenceDataGenerated": 27 } }
   }
 }
 ```
@@ -225,7 +252,7 @@ docker run -d \
 docker build -t packagenameguardian .
 ```
 
-The included multi-stage `Dockerfile` builds `bootJar` with the Gradle wrapper, then `jlink`s a minimal JRE (only the modules `jdeps` finds actually in use, plus `jdk.crypto.ec`) into a non-root `alpine` runtime image. All configuration is passed as environment variables:
+The included multi-stage `Dockerfile` builds `bootJar` with the Gradle wrapper, extracts it into Spring Boot layers, `jlink`s a minimal JRE (only the modules `jdeps` finds actually in use, plus `jdk.crypto.ec`) on BellSoft Liberica musl, and assembles a non-root `alpaquita-linux-base` (musl) runtime image. All configuration is passed as environment variables:
 
 ```bash
 docker run -d \
@@ -306,11 +333,13 @@ Commit the regenerated file through a normal reviewed PR (the scheduled `refresh
 | Category | YAML property | Default | Description |
 |---|---|---|---|
 | **Reference data** | `packagenameguardian.reference-data.min-acceptable-count-per-ecosystem` | `5000` | Health-check floor — fewer rows than this for any ecosystem reports `DOWN` |
-| | `packagenameguardian.reference-data.freshness-max-age-hours` | `1512` (63 days) | How stale the seed migration's last apply can get before reporting `DEGRADED` |
+| | `packagenameguardian.reference-data.freshness-max-age-hours` | `1512` (63 days) | How old the seed's data (its `generated_at`) can get before reporting `DEGRADED` |
 | **Security** | `packagenameguardian.security.enabled` | `true` | Require `Authorization: Bearer {api-key}` on `POST /v1/check` |
-| | `packagenameguardian.security.api-key` | _(empty)_ | Fails closed if enabled with no key set |
+| | `packagenameguardian.security.api-key` | _(empty)_ | Key for `POST /v1/check` (held by SilicaProxy). Fails closed if enabled with no key set |
+| | `packagenameguardian.security.admin-api-key` | _(empty)_ | Separate key for `/v1/allowlist` — must **not** be given to the proxy. Fails closed if empty; the check key is not accepted there, nor the admin key on `/v1/check` |
 | **Similarity** | `packagenameguardian.similarity.npm-same-scope-exemption-enabled` | `true` | Exempt candidates sharing a known npm `@scope` |
 | | `packagenameguardian.similarity.maven-same-group-id-exemption-enabled` | `true` | Exempt candidates sharing a known Maven `groupId` |
+| **Allowlist** | `packagenameguardian.allowlist.refresh-interval-ms` | `60000` | How often `package_allowlist` (and `reference_package`) is reloaded into the in-memory snapshot |
 | **Database** | `spring.datasource.url` | `jdbc:postgresql://localhost:5433/packagenameguardian` | |
 | | `spring.datasource.username` / `password` | `postgres` / `postgres` | |
 | **Server** | `server.port` | `8100` | |
@@ -322,11 +351,13 @@ Pass these as `-e` flags to `docker run`, or use in a `docker-compose.yml` `envi
 | Category | Environment variable | Default | Description |
 |---|---|---|---|
 | **Reference data** | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_MIN_ACCEPTABLE_COUNT_PER_ECOSYSTEM` | `5000` | Health-check floor — fewer rows than this for any ecosystem reports `DOWN` |
-| | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_FRESHNESS_MAX_AGE_HOURS` | `1512` (63 days) | How stale the seed migration's last apply can get before reporting `DEGRADED` |
+| | `PACKAGENAMEGUARDIAN_REFERENCE_DATA_FRESHNESS_MAX_AGE_HOURS` | `1512` (63 days) | How old the seed's data (its `generated_at`) can get before reporting `DEGRADED` |
 | **Security** | `PACKAGENAMEGUARDIAN_SECURITY_ENABLED` | `true` | Require `Authorization: Bearer {api-key}` on `POST /v1/check` |
-| | `PACKAGENAMEGUARDIAN_SECURITY_API_KEY` | _(empty)_ | Fails closed if enabled with no key set |
+| | `PACKAGENAMEGUARDIAN_API_KEY` | _(empty)_ | Key for `POST /v1/check`. Fails closed if enabled with no key set |
+| | `PACKAGENAMEGUARDIAN_ADMIN_API_KEY` | _(empty)_ | Key for `/v1/allowlist`, distinct from the check key. Fails closed if empty |
 | **Similarity** | `PACKAGENAMEGUARDIAN_SIMILARITY_NPM_SAME_SCOPE_EXEMPTION_ENABLED` | `true` | Exempt candidates sharing a known npm `@scope` |
 | | `PACKAGENAMEGUARDIAN_SIMILARITY_MAVEN_SAME_GROUP_ID_EXEMPTION_ENABLED` | `true` | Exempt candidates sharing a known Maven `groupId` |
+| **Allowlist** | `PACKAGENAMEGUARDIAN_ALLOWLIST_REFRESH_INTERVAL_MS` | `60000` | How often `package_allowlist` (and `reference_package`) is reloaded into the in-memory snapshot |
 | **Database** | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5433/packagenameguardian` | |
 | | `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `postgres` / `postgres` | |
 | **Server** | `SERVER_PORT` | `8100` | |
